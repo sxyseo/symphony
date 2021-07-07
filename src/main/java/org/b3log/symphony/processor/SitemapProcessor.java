@@ -1,32 +1,30 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2016,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.processor;
 
-import java.io.IOException;
-import javax.inject.Inject;
-import javax.servlet.http.HttpServletResponse;
+import org.b3log.latke.http.HttpMethod;
+import org.b3log.latke.http.RequestContext;
+import org.b3log.latke.http.annotation.RequestProcessing;
+import org.b3log.latke.http.annotation.RequestProcessor;
+import org.b3log.latke.http.renderer.TextXmlRenderer;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
-import org.b3log.latke.servlet.HTTPRequestContext;
-import org.b3log.latke.servlet.HTTPRequestMethod;
-import org.b3log.latke.servlet.annotation.RequestProcessing;
-import org.b3log.latke.servlet.annotation.RequestProcessor;
-import org.b3log.latke.servlet.renderer.TextXMLRenderer;
 import org.b3log.symphony.model.sitemap.Sitemap;
 import org.b3log.symphony.service.SitemapQueryService;
 
@@ -43,7 +41,7 @@ public class SitemapProcessor {
     /**
      * Logger.
      */
-    private static final Logger LOGGER = Logger.getLogger(SitemapProcessor.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(SitemapProcessor.class);
 
     /**
      * Sitemap query service.
@@ -56,9 +54,9 @@ public class SitemapProcessor {
      *
      * @param context the specified context
      */
-    @RequestProcessing(value = "/sitemap.xml", method = HTTPRequestMethod.GET)
-    public void sitemap(final HTTPRequestContext context) {
-        final TextXMLRenderer renderer = new TextXMLRenderer();
+    @RequestProcessing(value = "/sitemap.xml", method = HttpMethod.GET)
+    public void sitemap(final RequestContext context) {
+        final TextXmlRenderer renderer = new TextXmlRenderer();
 
         context.setRenderer(renderer);
 
@@ -79,11 +77,7 @@ public class SitemapProcessor {
         } catch (final Exception e) {
             LOGGER.log(Level.ERROR, "Get blog article feed error", e);
 
-            try {
-                context.getResponse().sendError(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-            } catch (final IOException ex) {
-                throw new RuntimeException(ex);
-            }
+            context.getResponse().sendError(500);
         }
     }
 }

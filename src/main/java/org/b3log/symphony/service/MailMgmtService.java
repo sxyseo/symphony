@@ -1,47 +1,36 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2016,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import javax.inject.Inject;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.User;
-import org.b3log.latke.repository.CompositeFilterOperator;
-import org.b3log.latke.repository.FilterOperator;
-import org.b3log.latke.repository.PropertyFilter;
-import org.b3log.latke.repository.Query;
-import org.b3log.latke.repository.SortDirection;
-import org.b3log.latke.repository.Transaction;
+import org.b3log.latke.repository.*;
 import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.annotation.Service;
 import org.b3log.latke.util.CollectionUtils;
 import org.b3log.latke.util.Strings;
 import org.b3log.symphony.model.Article;
 import org.b3log.symphony.model.Option;
+import org.b3log.symphony.model.Tag;
 import org.b3log.symphony.model.UserExt;
 import org.b3log.symphony.repository.ArticleRepository;
 import org.b3log.symphony.repository.OptionRepository;
@@ -51,11 +40,13 @@ import org.b3log.symphony.util.Symphonys;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.*;
+
 /**
  * Mail management service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.0.3, Oct 28, 2016
+ * @version 1.0.1.3, Jun 6, 2019
  * @since 1.6.0
  */
 @Service
@@ -64,7 +55,7 @@ public class MailMgmtService {
     /**
      * Logger.
      */
-    private static final Logger LOGGER = Logger.getLogger(MailMgmtService.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(MailMgmtService.class);
 
     /**
      * User repository.
@@ -103,6 +94,12 @@ public class MailMgmtService {
     private AvatarQueryService avatarQueryService;
 
     /**
+     * User query service.
+     */
+    @Inject
+    private UserQueryService userQueryService;
+
+    /**
      * Weekly newsletter sending status.
      */
     private boolean weeklyNewsletterSending;
@@ -135,15 +132,13 @@ public class MailMgmtService {
 
             // select receivers 
             final Query toUserQuery = new Query();
-            toUserQuery.setCurrentPageNum(1).setPageCount(1).setPageSize(userSize).
+            toUserQuery.setPage(1, userSize).setPageCount(1).
                     setFilter(CompositeFilterOperator.and(
-                            new PropertyFilter(UserExt.USER_SUB_MAIL_SEND_TIME, FilterOperator.LESS_THAN_OR_EQUAL,
-                                    sevenDaysAgo),
-                            new PropertyFilter(UserExt.USER_LATEST_LOGIN_TIME, FilterOperator.LESS_THAN_OR_EQUAL,
-                                    sevenDaysAgo),
-                            new PropertyFilter(UserExt.USER_SUB_MAIL_STATUS, FilterOperator.EQUAL,
-                                    UserExt.USER_SUB_MAIL_STATUS_ENABLED),
-                            new PropertyFilter(UserExt.USER_STATUS, FilterOperator.EQUAL, UserExt.USER_STATUS_C_VALID)
+                            new PropertyFilter(UserExt.USER_SUB_MAIL_SEND_TIME, FilterOperator.LESS_THAN_OR_EQUAL, sevenDaysAgo),
+                            new PropertyFilter(UserExt.USER_LATEST_LOGIN_TIME, FilterOperator.LESS_THAN_OR_EQUAL, sevenDaysAgo),
+                            new PropertyFilter(UserExt.USER_SUB_MAIL_STATUS, FilterOperator.EQUAL, UserExt.USER_SUB_MAIL_STATUS_ENABLED),
+                            new PropertyFilter(UserExt.USER_STATUS, FilterOperator.EQUAL, UserExt.USER_STATUS_C_VALID),
+                            new PropertyFilter(User.USER_EMAIL, FilterOperator.NOT_LIKE, "%" + UserExt.USER_BUILTIN_EMAIL_SUFFIX)
                     )).addSort(Keys.OBJECT_ID, SortDirection.ASCENDING);
             final JSONArray receivers = userRepository.get(toUserQuery).optJSONArray(Keys.RESULTS);
 
@@ -163,7 +158,7 @@ public class MailMgmtService {
                     toMails.add(email);
 
                     user.put(UserExt.USER_SUB_MAIL_SEND_TIME, now);
-                    userRepository.update(user.optString(Keys.OBJECT_ID), user);
+                    userRepository.update(user.optString(Keys.OBJECT_ID), user, UserExt.USER_SUB_MAIL_SEND_TIME);
                 }
             }
             transaction.commit();
@@ -174,19 +169,27 @@ public class MailMgmtService {
                 toMails.add(admin.optString(User.USER_EMAIL));
             }
 
+            final Map<String, Object> dataModel = new HashMap<>();
+
             // select nice articles
             final Query articleQuery = new Query();
-            articleQuery.setCurrentPageNum(1).setPageCount(1).setPageSize(Symphonys.getInt("sendcloud.batch.articleSize")).
+            articleQuery.setPage(1, Symphonys.MAIL_BATCH_ARTICLE_SIZE).setPageCount(1).
                     setFilter(CompositeFilterOperator.and(
                             new PropertyFilter(Article.ARTICLE_CREATE_TIME, FilterOperator.GREATER_THAN_OR_EQUAL, sevenDaysAgo),
                             new PropertyFilter(Article.ARTICLE_TYPE, FilterOperator.EQUAL, Article.ARTICLE_TYPE_C_NORMAL),
-                            new PropertyFilter(Article.ARTICLE_STATUS, FilterOperator.EQUAL, Article.ARTICLE_STATUS_C_VALID)
-                    )).addSort(Article.ARTICLE_COMMENT_CNT, SortDirection.DESCENDING).
+                            new PropertyFilter(Article.ARTICLE_STATUS, FilterOperator.NOT_EQUAL, Article.ARTICLE_STATUS_C_INVALID),
+                            new PropertyFilter(Article.ARTICLE_TAGS, FilterOperator.NOT_LIKE, Tag.TAG_TITLE_C_SANDBOX + "%")
+                    )).addSort(Article.ARTICLE_PUSH_ORDER, SortDirection.DESCENDING).
+                    addSort(Article.ARTICLE_COMMENT_CNT, SortDirection.DESCENDING).
                     addSort(Article.REDDIT_SCORE, SortDirection.DESCENDING);
             final List<JSONObject> articles = CollectionUtils.jsonArrayToList(
                     articleRepository.get(articleQuery).optJSONArray(Keys.RESULTS));
+            if (articles.isEmpty()) {
+                LOGGER.info("No article as newsletter to send");
 
-            articleQueryService.organizeArticles(UserExt.USER_AVATAR_VIEW_MODE_C_STATIC, articles);
+                return;
+            }
+            articleQueryService.organizeArticles(articles);
 
             String mailSubject = "";
             int goodCnt = 0;
@@ -200,33 +203,15 @@ public class MailMgmtService {
                 }
             }
 
+            dataModel.put(Article.ARTICLES, articles);
+
             // select nice users
-            final int RANGE_SIZE = 64;
-            final int SELECT_SIZE = 6;
-            final Query userQuery = new Query();
-            userQuery.setCurrentPageNum(1).setPageCount(1).setPageSize(RANGE_SIZE).
-                    setFilter(new PropertyFilter(UserExt.USER_STATUS, FilterOperator.EQUAL, UserExt.USER_STATUS_C_VALID)).
-                    addSort(UserExt.USER_ARTICLE_COUNT, SortDirection.DESCENDING).
-                    addSort(UserExt.USER_COMMENT_COUNT, SortDirection.DESCENDING);
-            final JSONArray rangeUsers = userRepository.get(userQuery).optJSONArray(Keys.RESULTS);
-            final List<Integer> indices = CollectionUtils.getRandomIntegers(0, RANGE_SIZE, SELECT_SIZE);
-            final List<JSONObject> users = new ArrayList<>();
-            for (final Integer index : indices) {
-                users.add(rangeUsers.getJSONObject(index));
-            }
-
-            for (final JSONObject selectedUser : users) {
-                avatarQueryService.fillUserAvatarURL(UserExt.USER_AVATAR_VIEW_MODE_C_STATIC, selectedUser);
-            }
-
-            final Map<String, Object> dataModel = new HashMap<>();
-            dataModel.put(Article.ARTICLES, (Object) articles);
-            dataModel.put(User.USERS, (Object) users);
+            final List<JSONObject> users = userQueryService.getNiceUsers(6);
+            dataModel.put(User.USERS, users);
 
             final String fromName = langPropsService.get("symphonyEnLabel") + " "
                     + langPropsService.get("weeklyEmailFromNameLabel", Latkes.getLocale());
-            Mails.batchSendHTML(fromName, mailSubject, new ArrayList<>(toMails),
-                    Mails.TEMPLATE_NAME_WEEKLY, dataModel);
+            Mails.batchSendHTML(fromName, mailSubject, new ArrayList<>(toMails), Mails.TEMPLATE_NAME_WEEKLY, dataModel);
 
             LOGGER.info("Sent weekly newsletter [" + toMails.size() + "]");
         } catch (final Exception e) {

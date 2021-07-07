@@ -1,71 +1,53 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2016,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.cache;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Keys;
-import org.b3log.latke.ioc.LatkeBeanManager;
-import org.b3log.latke.ioc.LatkeBeanManagerImpl;
+import org.b3log.latke.ioc.BeanManager;
+import org.b3log.latke.ioc.Singleton;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
-import org.b3log.latke.repository.CompositeFilterOperator;
-import org.b3log.latke.repository.FilterOperator;
-import org.b3log.latke.repository.PropertyFilter;
-import org.b3log.latke.repository.Query;
-import org.b3log.latke.repository.RepositoryException;
-import org.b3log.latke.repository.SortDirection;
-import org.b3log.latke.repository.Transaction;
+import org.b3log.latke.repository.*;
 import org.b3log.latke.util.CollectionUtils;
 import org.b3log.symphony.model.Tag;
 import org.b3log.symphony.repository.TagRepository;
-import org.b3log.symphony.service.ShortLinkQueryService;
 import org.b3log.symphony.util.JSONs;
-import org.b3log.symphony.util.Markdowns;
 import org.b3log.symphony.util.Symphonys;
 import org.json.JSONObject;
-import org.jsoup.Jsoup;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Tag cache.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.5.5.0, Nov 24, 2016
+ * @version 1.5.6.5, Aug 31, 2018
  * @since 1.4.0
  */
-@Named
 @Singleton
 public class TagCache {
 
     /**
      * Logger.
      */
-    private static final Logger LOGGER = Logger.getLogger(TagCache.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(TagCache.class);
 
     /**
      * Icon tags.
@@ -99,7 +81,7 @@ public class TagCache {
      * @return tag, returns {@code null} if not found
      */
     public JSONObject getTag(final String id) {
-        final JSONObject tag = (JSONObject) CACHE.get(id);
+        final JSONObject tag = CACHE.get(id);
         if (null == tag) {
             return null;
         }
@@ -128,7 +110,7 @@ public class TagCache {
      * @param id the specified tag id
      */
     public void removeTag(final String id) {
-        final JSONObject tag = (JSONObject) CACHE.get(id);
+        final JSONObject tag = CACHE.get(id);
         if (null == tag) {
             return;
         }
@@ -158,7 +140,7 @@ public class TagCache {
             return Collections.emptyList();
         }
 
-        return new ArrayList<>(NEW_TAGS);
+        return JSONs.clone(NEW_TAGS);
     }
 
     /**
@@ -174,7 +156,7 @@ public class TagCache {
 
         final int end = fetchSize >= ICON_TAGS.size() ? ICON_TAGS.size() : fetchSize;
 
-        return new ArrayList<>(ICON_TAGS.subList(0, end));
+        return JSONs.clone(ICON_TAGS.subList(0, end));
     }
 
     /**
@@ -187,7 +169,7 @@ public class TagCache {
             return Collections.emptyList();
         }
 
-        return new ArrayList<>(TAGS);
+        return JSONs.clone(TAGS);
     }
 
     /**
@@ -202,19 +184,19 @@ public class TagCache {
     /**
      * Loads new tags.
      */
-    public void loadNewTags() {
-        final LatkeBeanManager beanManager = LatkeBeanManagerImpl.getInstance();
+    private void loadNewTags() {
+        final BeanManager beanManager = BeanManager.getInstance();
         final TagRepository tagRepository = beanManager.getReference(TagRepository.class);
 
         final Query query = new Query().addSort(Keys.OBJECT_ID, SortDirection.DESCENDING).
-                setCurrentPageNum(1).setPageSize(Symphonys.getInt("newTagsCnt")).setPageCount(1);
+                setPage(1, Symphonys.SIDE_TAGS_CNT).setPageCount(1);
 
         query.setFilter(new PropertyFilter(Tag.TAG_REFERENCE_CNT, FilterOperator.GREATER_THAN, 0));
 
         try {
             final JSONObject result = tagRepository.get(query);
             NEW_TAGS.clear();
-            NEW_TAGS.addAll(CollectionUtils.<JSONObject>jsonArrayToList(result.optJSONArray(Keys.RESULTS)));
+            NEW_TAGS.addAll(CollectionUtils.jsonArrayToList(result.optJSONArray(Keys.RESULTS)));
         } catch (final RepositoryException e) {
             LOGGER.log(Level.ERROR, "Gets new tags failed", e);
         }
@@ -223,37 +205,27 @@ public class TagCache {
     /**
      * Loads icon tags.
      */
-    public void loadIconTags() {
-        final LatkeBeanManager beanManager = LatkeBeanManagerImpl.getInstance();
+    private void loadIconTags() {
+        final BeanManager beanManager = BeanManager.getInstance();
         final TagRepository tagRepository = beanManager.getReference(TagRepository.class);
-        final ShortLinkQueryService shortLinkQueryService = beanManager.getReference(ShortLinkQueryService.class);
 
-        final Query query = new Query().setFilter(
-                CompositeFilterOperator.and(
+        final Query query = new Query().
+                setFilter(CompositeFilterOperator.and(
                         new PropertyFilter(Tag.TAG_ICON_PATH, FilterOperator.NOT_EQUAL, ""),
-                        new PropertyFilter(Tag.TAG_STATUS, FilterOperator.EQUAL, Tag.TAG_STATUS_C_VALID)))
-                .setCurrentPageNum(1).setPageSize(Integer.MAX_VALUE).setPageCount(1)
-                .addSort(Tag.TAG_RANDOM_DOUBLE, SortDirection.ASCENDING);
+                        new PropertyFilter(Tag.TAG_STATUS, FilterOperator.EQUAL, Tag.TAG_STATUS_C_VALID))).
+                setPage(1, Integer.MAX_VALUE).setPageCount(1).
+                addSort(Tag.TAG_RANDOM_DOUBLE, SortDirection.ASCENDING);
         try {
             final JSONObject result = tagRepository.get(query);
-            final List<JSONObject> tags = CollectionUtils.<JSONObject>jsonArrayToList(result.optJSONArray(Keys.RESULTS));
-            final List<JSONObject> toUpdateTags = new ArrayList();
+            final List<JSONObject> tags = CollectionUtils.jsonArrayToList(result.optJSONArray(Keys.RESULTS));
+            final List<JSONObject> toUpdateTags = new ArrayList<>();
             for (final JSONObject tag : tags) {
                 toUpdateTags.add(JSONs.clone(tag));
             }
 
             for (final JSONObject tag : tags) {
-                String description = tag.optString(Tag.TAG_DESCRIPTION);
-                String descriptionText = tag.optString(Tag.TAG_TITLE);
-                if (StringUtils.isNotBlank(description)) {
-                    description = shortLinkQueryService.linkTag(description);
-                    description = Markdowns.toHTML(description);
-
-                    tag.put(Tag.TAG_DESCRIPTION, description);
-                    descriptionText = Jsoup.parse(description).text();
-                }
-
-                tag.put(Tag.TAG_T_DESCRIPTION_TEXT, descriptionText);
+                Tag.fillDescription(tag);
+                tag.put(Tag.TAG_T_TITLE_LOWER_CASE, tag.optString(Tag.TAG_TITLE).toLowerCase());
             }
 
             ICON_TAGS.clear();
@@ -276,48 +248,24 @@ public class TagCache {
      * Loads all tags.
      */
     public void loadAllTags() {
-        final LatkeBeanManager beanManager = LatkeBeanManagerImpl.getInstance();
+        final BeanManager beanManager = BeanManager.getInstance();
         final TagRepository tagRepository = beanManager.getReference(TagRepository.class);
-        final ShortLinkQueryService shortLinkQueryService = beanManager.getReference(ShortLinkQueryService.class);
 
-        final Query query = new Query().setFilter(
-                new PropertyFilter(Tag.TAG_STATUS, FilterOperator.EQUAL, Tag.TAG_STATUS_C_VALID))
-                .setCurrentPageNum(1).setPageSize(Integer.MAX_VALUE).setPageCount(1);
+        final Query query = new Query().
+                setFilter(new PropertyFilter(Tag.TAG_STATUS, FilterOperator.EQUAL, Tag.TAG_STATUS_C_VALID)).
+                setPage(1, Integer.MAX_VALUE).setPageCount(1);
         try {
             final JSONObject result = tagRepository.get(query);
-            final List<JSONObject> tags = CollectionUtils.<JSONObject>jsonArrayToList(result.optJSONArray(Keys.RESULTS));
-
-            // for legacy data migration
-            final Transaction transaction = tagRepository.beginTransaction();
-            try {
-                for (final JSONObject tag : tags) {
-                    String uri = tag.optString(Tag.TAG_URI);
-                    if (StringUtils.isBlank(uri)) {
-                        final String tagTitle = tag.optString(Tag.TAG_TITLE);
-                        tag.put(Tag.TAG_URI, URLEncoder.encode(tagTitle, "UTF-8"));
-                        tag.put(Tag.TAG_CSS, "");
-
-                        tagRepository.update(tag.optString(Keys.OBJECT_ID), tag);
-
-                        LOGGER.info("Migrated tag [title=" + tagTitle + "]");
-                    }
-                }
-
-                transaction.commit();
-            } catch (final RepositoryException | UnsupportedEncodingException e) {
-                if (transaction.isActive()) {
-                    transaction.rollback();
-                }
-
-                LOGGER.log(Level.ERROR, "Migrates tag data failed", e);
-            }
+            final List<JSONObject> tags = CollectionUtils.jsonArrayToList(result.optJSONArray(Keys.RESULTS));
 
             final Iterator<JSONObject> iterator = tags.iterator();
             while (iterator.hasNext()) {
                 final JSONObject tag = iterator.next();
 
                 String title = tag.optString(Tag.TAG_TITLE);
-                if (StringUtils.contains(title, " ") || StringUtils.contains(title, "　")) { // filter legacy data
+                if ("".equals(title)
+                        || StringUtils.contains(title, " ")
+                        || StringUtils.contains(title, "　")) { // filter legacy data
                     iterator.remove();
 
                     continue;
@@ -331,28 +279,15 @@ public class TagCache {
                     }
                 }
 
-                String description = tag.optString(Tag.TAG_DESCRIPTION);
-                String descriptionText = title;
-                if (StringUtils.isNotBlank(description)) {
-                    description = shortLinkQueryService.linkTag(description);
-                    description = Markdowns.toHTML(description);
-
-                    tag.put(Tag.TAG_DESCRIPTION, description);
-                    descriptionText = Jsoup.parse(description).text();
-                }
-
-                tag.put(Tag.TAG_T_DESCRIPTION_TEXT, descriptionText);
+                Tag.fillDescription(tag);
                 tag.put(Tag.TAG_T_TITLE_LOWER_CASE, tag.optString(Tag.TAG_TITLE).toLowerCase());
             }
 
-            Collections.sort(tags, new Comparator<JSONObject>() {
-                @Override
-                public int compare(final JSONObject t1, final JSONObject t2) {
-                    final String u1Title = t1.optString(Tag.TAG_T_TITLE_LOWER_CASE);
-                    final String u2Title = t2.optString(Tag.TAG_T_TITLE_LOWER_CASE);
+            tags.sort((t1, t2) -> {
+                final String u1Title = t1.optString(Tag.TAG_T_TITLE_LOWER_CASE);
+                final String u2Title = t2.optString(Tag.TAG_T_TITLE_LOWER_CASE);
 
-                    return u1Title.compareTo(u2Title);
-                }
+                return u1Title.compareTo(u2Title);
             });
 
             TAGS.clear();

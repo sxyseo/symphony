@@ -1,30 +1,28 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2016,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
-import java.util.List;
-import javax.inject.Inject;
 import org.b3log.latke.Keys;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.repository.RepositoryException;
 import org.b3log.latke.repository.annotation.Transactional;
-import org.b3log.latke.service.ServiceException;
 import org.b3log.latke.service.annotation.Service;
 import org.b3log.symphony.model.Article;
 import org.b3log.symphony.model.Comment;
@@ -36,11 +34,13 @@ import org.b3log.symphony.repository.TagArticleRepository;
 import org.b3log.symphony.repository.VoteRepository;
 import org.json.JSONObject;
 
+import java.util.List;
+
 /**
  * Vote management service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.1.1.0, Jul 31, 2016
+ * @version 1.1.1.1, Jun 6, 2019
  * @since 1.3.0
  */
 @Service
@@ -49,7 +49,7 @@ public class VoteMgmtService {
     /**
      * Logger.
      */
-    private static final Logger LOGGER = Logger.getLogger(VoteMgmtService.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(VoteMgmtService.class);
 
     /**
      * Vote repository.
@@ -82,10 +82,43 @@ public class VoteMgmtService {
     private LivenessMgmtService livenessMgmtService;
 
     /**
+     * Gets Reddit article score.
+     *
+     * @param ups   the specified vote up count
+     * @param downs the specified vote down count
+     * @param t     time (epoch seconds)
+     * @return reddit score
+     */
+    private static double redditArticleScore(final int ups, final int downs, final long t) {
+        final int x = ups - downs;
+        final double z = Math.max(Math.abs(x), 1);
+        int y = 0;
+        if (x > 0) {
+            y = 1;
+        } else if (x < 0) {
+            y = -1;
+        }
+
+        return Math.log10(z) + y * (t - 1353745196) / 45000;
+    }
+
+    private static double redditCommentScore(final int ups, final int downs) {
+        final int n = ups + downs;
+        if (0 == n) {
+            return 0;
+        }
+
+        final double z = 1.281551565545; // 1.0: 85%, 1.6: 95%, 1.281551565545: 80%
+        final double p = (double) ups / n;
+
+        return (p + z * z / (2 * n) - z * Math.sqrt((p * (1 - p) + z * z / (4 * n)) / n)) / (1 + z * z / n);
+    }
+
+    /**
      * Cancels the vote.
      *
-     * @param userId the specified user id
-     * @param dataId the specified data id
+     * @param userId   the specified user id
+     * @param dataId   the specified data id
      * @param dataType the specified data type
      */
     @Transactional
@@ -116,7 +149,7 @@ public class VoteMgmtService {
 
                 updateTagArticleScore(article);
 
-                articleRepository.update(dataId, article);
+                articleRepository.update(dataId, article, Article.ARTICLE_GOOD_CNT, Article.ARTICLE_BAD_CNT, Article.REDDIT_SCORE);
             } else if (Vote.DATA_TYPE_C_COMMENT == dataType) {
                 final JSONObject comment = commentRepository.get(dataId);
                 if (null == comment) {
@@ -149,20 +182,17 @@ public class VoteMgmtService {
     /**
      * The specified user vote up the specified article/comment.
      *
-     * @param userId the specified user id
-     * @param dataId the specified article/comment id
+     * @param userId   the specified user id
+     * @param dataId   the specified article/comment id
      * @param dataType the specified data type
-     * @throws ServiceException service exception
      */
     @Transactional
-    public void voteUp(final String userId, final String dataId, final int dataType) throws ServiceException {
+    public void voteUp(final String userId, final String dataId, final int dataType) {
         try {
             up(userId, dataId, dataType);
         } catch (final RepositoryException e) {
             final String msg = "User[id=" + userId + "] vote up an [" + dataType + "][id=" + dataId + "] failed";
             LOGGER.log(Level.ERROR, msg, e);
-
-            throw new ServiceException(msg);
         }
 
         livenessMgmtService.incLiveness(userId, Liveness.LIVENESS_VOTE);
@@ -173,17 +203,14 @@ public class VoteMgmtService {
      *
      * @param userId the specified user id
      * @param dataId the specified article id
-     * @throws ServiceException service exception
      */
     @Transactional
-    public void voteDown(final String userId, final String dataId, final int dataType) throws ServiceException {
+    public void voteDown(final String userId, final String dataId, final int dataType) {
         try {
             down(userId, dataId, dataType);
         } catch (final RepositoryException e) {
             final String msg = "User[id=" + userId + "] vote down an [" + dataType + "][id=" + dataId + "] failed";
             LOGGER.log(Level.ERROR, msg, e);
-
-            throw new ServiceException(msg);
         }
 
         livenessMgmtService.incLiveness(userId, Liveness.LIVENESS_VOTE);
@@ -192,8 +219,8 @@ public class VoteMgmtService {
     /**
      * The specified user vote up the specified data entity with the specified data type.
      *
-     * @param userId the specified user id
-     * @param dataId the specified data entity id
+     * @param userId   the specified user id
+     * @param dataId   the specified data entity id
      * @param dataType the specified data type
      * @throws RepositoryException repository exception
      */
@@ -224,7 +251,7 @@ public class VoteMgmtService {
 
             updateTagArticleScore(article);
 
-            articleRepository.update(dataId, article);
+            articleRepository.update(dataId, article, Article.ARTICLE_GOOD_CNT, Article.ARTICLE_BAD_CNT, Article.REDDIT_SCORE);
         } else if (Vote.DATA_TYPE_C_COMMENT == dataType) {
             final JSONObject comment = commentRepository.get(dataId);
             if (null == comment) {
@@ -263,8 +290,8 @@ public class VoteMgmtService {
     /**
      * The specified user vote down the specified data entity with the specified data type.
      *
-     * @param userId the specified user id
-     * @param dataId the specified data entity id
+     * @param userId   the specified user id
+     * @param dataId   the specified data entity id
      * @param dataType the specified data type
      * @throws RepositoryException repository exception
      */
@@ -295,7 +322,7 @@ public class VoteMgmtService {
 
             updateTagArticleScore(article);
 
-            articleRepository.update(dataId, article);
+            articleRepository.update(dataId, article, Article.ARTICLE_GOOD_CNT, Article.ARTICLE_BAD_CNT, Article.REDDIT_SCORE);
         } else if (Vote.DATA_TYPE_C_COMMENT == dataType) {
             final JSONObject comment = commentRepository.get(dataId);
             if (null == comment) {
@@ -329,39 +356,6 @@ public class VoteMgmtService {
         vote.put(Vote.DATA_TYPE, dataType);
 
         voteRepository.add(vote);
-    }
-
-    /**
-     * Gets Reddit article score.
-     *
-     * @param ups the specified vote up count
-     * @param downs the specified vote down count
-     * @param t time (epoch seconds)
-     * @return reddit score
-     */
-    private static double redditArticleScore(final int ups, final int downs, final long t) {
-        final int x = ups - downs;
-        final double z = Math.max(Math.abs(x), 1);
-        int y = 0;
-        if (x > 0) {
-            y = 1;
-        } else if (x < 0) {
-            y = -1;
-        }
-
-        return Math.log10(z) + y * (t - 1353745196) / 45000;
-    }
-
-    private static double redditCommentScore(final int ups, final int downs) {
-        final int n = ups + downs;
-        if (0 == n) {
-            return 0;
-        }
-
-        final double z = 1.281551565545; // 1.0: 85%, 1.6: 95%, 1.281551565545: 80%
-        final double p = (double) ups / n;
-
-        return (p + z * z / (2 * n) - z * Math.sqrt((p * (1 - p) + z * z / (4 * n)) / n)) / (1 + z * z / n);
     }
 
     private void updateTagArticleScore(final JSONObject article) throws RepositoryException {

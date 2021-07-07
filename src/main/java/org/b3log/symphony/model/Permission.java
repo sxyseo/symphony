@@ -1,19 +1,19 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2016,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.model;
 
@@ -22,12 +22,11 @@ import java.util.Set;
 /**
  * This class defines all permission model relevant keys.
  * <p>
- * <p>
  * See <a href="https://github.com/b3log/symphony/issues/337">#337</a> for more details.
  * </p>
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.4.1.0, Dec 11, 2016
+ * @version 1.12.0.0, Jun 25, 2018
  * @since 1.8.0
  */
 public final class Permission {
@@ -52,6 +51,7 @@ public final class Permission {
      */
     public static final String PERMISSION_ID = "permissionId";
 
+    //// Transient ////
     /**
      * Key of permission categories.
      */
@@ -84,9 +84,29 @@ public final class Permission {
     public static final String PERMISSION_ID_C_COMMON_UPDATE_ARTICLE = "commonUpdateArticle";
 
     /**
+     * Id - common - remove article.
+     */
+    public static final String PERMISSION_ID_C_COMMON_REMOVE_ARTICLE = "commonRemoveArticle";
+
+    /**
      * Id - common - add comment.
      */
     public static final String PERMISSION_ID_C_COMMON_ADD_COMMENT = "commonAddComment";
+
+    /**
+     * Id - common - add breezemoon.
+     */
+    public static final String PERMISSION_ID_C_COMMON_ADD_BREEZEMOON = "commonAddBreezemoon";
+
+    /**
+     * Id - common - update breezemoon.
+     */
+    public static final String PERMISSION_ID_C_COMMON_UPDATE_BREEZEMOON = "commonUpdateBreezemoon";
+
+    /**
+     * Id - common - remove breezemoon.
+     */
+    public static final String PERMISSION_ID_C_COMMON_REMOVE_BREEZEMOON = "commonRemoveBreezemoon";
 
     /**
      * Id - common add comment anonymous.
@@ -97,6 +117,11 @@ public final class Permission {
      * Id - common - update comment.
      */
     public static final String PERMISSION_ID_C_COMMON_UPDATE_COMMENT = "commonUpdateComment";
+
+    /**
+     * Id - common - remove comment.
+     */
+    public static final String PERMISSION_ID_C_COMMON_REMOVE_COMMENT = "commonRemoveComment";
 
     /**
      * Id - common - view comment history.
@@ -129,6 +154,11 @@ public final class Permission {
     public static final String PERMISSION_ID_C_COMMON_FOLLOW_ARTICLE = "commonFollowArticle";
 
     /**
+     * Id - common - watch article.
+     */
+    public static final String PERMISSION_ID_C_COMMON_WATCH_ARTICLE = "commonWatchArticle";
+
+    /**
      * Id - common - view article history.
      */
     public static final String PERMISSION_ID_C_COMMON_VIEW_ARTICLE_HISTORY = "commonViewArticleHistory";
@@ -152,6 +182,11 @@ public final class Permission {
      * Id - common - at user.
      */
     public static final String PERMISSION_ID_C_COMMON_AT_USER = "commonAtUser";
+
+    /**
+     * Id - common - at participants.
+     */
+    public static final String PERMISSION_ID_C_COMMON_AT_PARTICIPANTS = "commonAtParticipants";
 
     /**
      * Id - common - exchange invitation code.
@@ -209,9 +244,19 @@ public final class Permission {
     public static final String PERMISSION_ID_C_ARTICLE_CANCEL_STICK_ARTICLE = "articleCancelStickArticle";
 
     /**
+     * Id - article - rebuild all articles index.
+     */
+    public static final String PERMISSION_ID_C_ARTICLE_REINDEX_ARTICLES_INDEX = "articleReindexArticles";
+
+    /**
      * Id - article - rebuild article index.
      */
     public static final String PERMISSION_ID_C_ARTICLE_REINDEX_ARTICLE_INDEX = "articleReindexArticle";
+
+    /**
+     * Id - article - add article.
+     */
+    public static final String PERMISSION_ID_C_ARTICLE_ADD_ARTICLE = "articleAddArticle";
 
     /**
      * Id - article - remove article.
@@ -227,6 +272,16 @@ public final class Permission {
      * Id - comment - remove comment.
      */
     public static final String PERMISSION_ID_C_COMMENT_REMOVE_COMMENT = "commentRemoveComment";
+
+    /**
+     * Id - breezemoon - update breezemoon.
+     */
+    public static final String PERMISSION_ID_C_BREEZEMOON_UPDATE_BREEZEMOON = "breezemoonUpdateBreezemoon";
+
+    /**
+     * Id - breezemoon - remove breezemoon.
+     */
+    public static final String PERMISSION_ID_C_BREEZEMOON_REMOVE_BREEZEMOON = "breezemoonRemoveBreezemoon";
 
     /**
      * Id - domain - add domain.
@@ -289,6 +344,11 @@ public final class Permission {
     public static final String PERMISSION_ID_C_AD_UPDATE_SIDE = "adUpdateADSide";
 
     /**
+     * Id - advertise - update banner.
+     */
+    public static final String PERMISSION_ID_C_AD_UPDATE_BANNER = "adUpdateBanner";
+
+    /**
      * Id - misc - allow add article.
      */
     public static final String PERMISSION_ID_C_MISC_ALLOW_ADD_ARTICLE = "miscAllowAddArticle";
@@ -312,6 +372,71 @@ public final class Permission {
      * Id - misc - change language.
      */
     public static final String PERMISSION_ID_C_MISC_LANGUAGE = "miscLanguage";
+
+    /**
+     * Id - menu - admin.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN = "menuAdmin";
+
+    /**
+     * Id - menu - admin - users.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_USERS = "menuAdminUsers";
+
+    /**
+     * Id - menu - admin - breezemoons.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_BREEZEMOONS = "menuAdminBreezemoons";
+
+    /**
+     * Id - menu - admin - articles.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_ARTICLES = "menuAdminArticles";
+
+    /**
+     * Id - menu - admin - comments.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_COMMENTS = "menuAdminComments";
+
+    /**
+     * Id - menu - admin - domains.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_DOMAINS = "menuAdminDomains";
+
+    /**
+     * Id - menu - admin - tags.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_TAGS = "menuAdminTags";
+
+    /**
+     * Id - menu - admin - reserved words.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_RWS = "menuAdminRWs";
+
+    /**
+     * Id - menu - admin - invitecodes.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_ICS = "menuAdminIcs";
+
+    /**
+     * Id - menu - admin - ad.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_AD = "menuAdminAD";
+
+    /**
+     * Id - menu - admin - roles.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_ROLES = "menuAdminRoles";
+
+    /**
+     * Id - menu - admin - reports.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_REPORTS = "menuAdminReports";
+
+    /**
+     * Id - menu - admin - misc.
+     */
+    public static final String PERMISSION_ID_C_MENU_ADMIN_MISC = "menuAdminMisc";
 
     // Category constants
     /**
@@ -364,6 +489,15 @@ public final class Permission {
      */
     public static final int PERMISSION_CATEGORY_C_MISC = 9;
 
+    /**
+     * Category - menu.
+     */
+    public static final int PERMISSION_CATEGORY_C_MENU = 10;
+
+    /**
+     * Category - breezemoon management.
+     */
+    public static final int PERMISSION_CATEGORY_C_BREEZEMOON = 11;
 
     /**
      * Private constructor.

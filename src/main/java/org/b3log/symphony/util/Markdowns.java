@@ -1,52 +1,44 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2016,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.util;
 
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.TreeMap;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
+import com.vladsch.flexmark.ext.autolink.AutolinkExtension;
+import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
+import com.vladsch.flexmark.ext.gfm.tasklist.TaskListExtension;
+import com.vladsch.flexmark.ext.tables.TablesExtension;
+import com.vladsch.flexmark.html.HtmlRenderer;
+import com.vladsch.flexmark.util.data.DataHolder;
+import com.vladsch.flexmark.util.data.MutableDataSet;
+import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.b3log.latke.Latkes;
-import org.b3log.latke.cache.Cache;
-import org.b3log.latke.cache.CacheFactory;
-import org.b3log.latke.ioc.LatkeBeanManagerImpl;
+import org.b3log.latke.ioc.BeanManager;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.service.LangPropsService;
-import org.b3log.latke.service.LangPropsServiceImpl;
-import org.b3log.latke.util.MD5;
+import org.b3log.latke.util.Callstacks;
 import org.b3log.latke.util.Stopwatchs;
-import org.b3log.latke.util.Strings;
+import org.b3log.latke.util.URLs;
+import org.b3log.symphony.model.Common;
+import org.b3log.symphony.model.UserExt;
+import org.b3log.symphony.service.UserQueryService;
+import org.json.JSONObject;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -54,28 +46,25 @@ import org.jsoup.parser.Parser;
 import org.jsoup.safety.Whitelist;
 import org.jsoup.select.Elements;
 import org.jsoup.select.NodeVisitor;
-import static org.parboiled.common.Preconditions.checkArgNotNull;
-import org.pegdown.DefaultVerbatimSerializer;
-import org.pegdown.Extensions;
-import org.pegdown.LinkRenderer;
-import org.pegdown.PegDownProcessor;
-import org.pegdown.Printer;
-import org.pegdown.VerbatimSerializer;
-import org.pegdown.ast.*;
-import org.pegdown.plugins.ToHtmlSerializerPlugin;
+
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.*;
+import java.util.concurrent.*;
 
 /**
  * <a href="http://en.wikipedia.org/wiki/Markdown">Markdown</a> utilities.
- *
  * <p>
- * Uses the <a href="https://github.com/chjj/marked">marked</a> as the processor, if not found this command, try
- * built-in
- * <a href="https://github.com/sirthias/pegdown">pegdown</a> instead.
+ * Uses the <a href="https://github.com/b3log/markdown-http">markdown-http</a> as the processor, if not found this service, try
+ * built-in <a href="https://github.com/vsch/flexmark-java">flexmark</a> instead.
  * </p>
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
  * @author <a href="http://zephyr.b3log.org">Zephyr</a>
- * @version 1.10.9.16, Nov 29, 2016
+ * @author <a href="http://vanessa.b3log.org">Vanessa</a>
+ * @version 1.11.21.17, Sep 18, 2019
  * @since 0.2.0
  */
 public final class Markdowns {
@@ -86,59 +75,58 @@ public final class Markdowns {
     private static final Logger LOGGER = Logger.getLogger(Markdowns.class);
 
     /**
-     * Language service.
-     */
-    public static final LangPropsService LANG_PROPS_SERVICE
-            = LatkeBeanManagerImpl.getInstance().getReference(LangPropsServiceImpl.class);
-
-    /**
      * Markdown cache.
      */
-    private static final Cache MD_CACHE = CacheFactory.getCache("markdown");
-
-    static {
-        MD_CACHE.setMaxCount(1024 * 10 * 4);
-    }
+    private static final Map<String, JSONObject> MD_CACHE = new ConcurrentHashMap<>();
 
     /**
-     * Markdown to HTML timeout.
+     * Lute engine serve path. https://github.com/b3log/lute
      */
-    private static final int MD_TIMEOUT = 800;
+    private static final String LUTE_ENGINE_URL = "http://localhost:8249";
 
     /**
-     * Whether marked is available.
+     * Built-in MD engine options.
      */
-    public static boolean MARKED_AVAILABLE;
+    private static final DataHolder OPTIONS = new MutableDataSet().
+            set(com.vladsch.flexmark.parser.Parser.EXTENSIONS, Arrays.asList(
+                    TablesExtension.create(),
+                    TaskListExtension.create(),
+                    StrikethroughExtension.create(),
+                    AutolinkExtension.create())).
+            set(HtmlRenderer.SOFT_BREAK, "<br />\n");
 
-    private static final String MARKED_ENGINE_URL = "http://localhost:8250";
+    /**
+     * Built-in MD engine parser.
+     */
+    private static final com.vladsch.flexmark.parser.Parser PARSER =
+            com.vladsch.flexmark.parser.Parser.builder(OPTIONS).build();
+
+    /**
+     * Built-in MD engine HTML renderer.
+     */
+    private static final HtmlRenderer RENDERER = HtmlRenderer.builder(OPTIONS).build();
+
+    /**
+     * Whether Lute is available.
+     */
+    public static boolean LUTE_AVAILABLE;
 
     static {
         try {
-            final URL url = new URL(MARKED_ENGINE_URL);
-            final HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setDoOutput(true);
-
-            final OutputStream outputStream = conn.getOutputStream();
-            IOUtils.write("Symphony 大法好", outputStream, "UTF-8");
-            IOUtils.closeQuietly(outputStream);
-
-            final InputStream inputStream = conn.getInputStream();
-            final String html = IOUtils.toString(inputStream, "UTF-8");
-            IOUtils.closeQuietly(inputStream);
-
-            conn.disconnect();
-
-            MARKED_AVAILABLE = StringUtils.contains(html, "<p>Symphony 大法好</p>");
-
-            if (MARKED_AVAILABLE) {
-                LOGGER.log(Level.INFO, "[marked] is available, uses it for markdown processing");
-            } else {
-                LOGGER.log(Level.INFO, "[marked] is not available, uses built-in [pegdown] for markdown processing");
+            final String html = toHtmlByLute("旧日的足迹");
+            LUTE_AVAILABLE = StringUtils.contains(html, "<p>旧日的足迹</p>");
+            if (LUTE_AVAILABLE) {
+                LOGGER.log(Level.INFO, "[Lute] is available");
             }
         } catch (final Exception e) {
-            LOGGER.log(Level.INFO, "[marked] is not available, uses built-in [pegdown] for markdown processing: "
-                    + e.getMessage());
+            // ignored
         }
+    }
+
+    /**
+     * Private constructor.
+     */
+    private Markdowns() {
     }
 
     /**
@@ -152,22 +140,48 @@ public final class Markdowns {
         final Document.OutputSettings outputSettings = new Document.OutputSettings();
         outputSettings.prettyPrint(false);
 
-        final String tmp = Jsoup.clean(content, baseURI, Whitelist.relaxed().
-                addAttributes(":all", "id", "target", "class").
-                addTags("span", "hr", "kbd", "samp", "tt", "del", "s", "strike", "u").
-                addAttributes("iframe", "src", "width", "height", "border", "marginwidth", "marginheight").
-                addAttributes("audio", "controls", "src").
-                addAttributes("video", "controls", "src", "width", "height").
-                addAttributes("source", "src", "media", "type").
-                addAttributes("object", "width", "height", "data", "type").
-                addAttributes("param", "name", "value").
-                addAttributes("embed", "src", "type", "width", "height", "wmode", "allowNetworking"),
-                outputSettings);
-        final Document doc = Jsoup.parse(tmp, baseURI, Parser.xmlParser());
+        final Whitelist whitelist = Whitelist.relaxed().addAttributes(":all", "id", "target", "class", "data-src", "aria-name", "aria-label");
+        inputWhitelist(whitelist);
+        final String tmp = Jsoup.clean(content, baseURI, whitelist, outputSettings);
+        final Document doc = Jsoup.parse(tmp, baseURI, Parser.htmlParser());
 
         final Elements ps = doc.getElementsByTag("p");
         for (final Element p : ps) {
             p.removeAttr("style");
+        }
+
+        final Elements iframes = doc.getElementsByTag("iframe");
+        for (final Element iframe : iframes) {
+            final String src = StringUtils.deleteWhitespace(iframe.attr("src"));
+            if (StringUtils.startsWithIgnoreCase(src, "javascript")
+                    || StringUtils.startsWithIgnoreCase(src, "data:")) {
+                iframe.remove();
+            }
+        }
+
+        final Elements objs = doc.getElementsByTag("object");
+        for (final Element obj : objs) {
+            final String data = StringUtils.deleteWhitespace(obj.attr("data"));
+            if (StringUtils.startsWithIgnoreCase(data, "data:")
+                    || StringUtils.startsWithIgnoreCase(data, "javascript")) {
+                obj.remove();
+
+                continue;
+            }
+
+            final String type = StringUtils.deleteWhitespace(obj.attr("type"));
+            if (StringUtils.containsIgnoreCase(type, "script")) {
+                obj.remove();
+            }
+        }
+
+        final Elements embeds = doc.getElementsByTag("embed");
+        for (final Element embed : embeds) {
+            final String data = StringUtils.deleteWhitespace(embed.attr("src"));
+            if (StringUtils.startsWithIgnoreCase(data, "data:")
+                    || StringUtils.startsWithIgnoreCase(data, "javascript")) {
+                embed.remove();
+            }
         }
 
         final Elements as = doc.getElementsByTag("a");
@@ -192,87 +206,22 @@ public final class Markdowns {
             video.attr("preload", "none");
         }
 
-        return doc.html();
-    }
-
-    /**
-     * Converts the email or url text to HTML.
-     *
-     * @param markdownText the specified markdown text
-     * @return converted HTML, returns an empty string "" if the specified markdown text is "" or {@code null}, returns
-     * 'markdownErrorLabel' if exception
-     */
-    public static String linkToHtml(final String markdownText) {
-        if (Strings.isEmptyOrNull(markdownText)) {
-            return "";
+        final Elements forms = doc.getElementsByTag("form");
+        for (final Element form : forms) {
+            form.remove();
         }
 
-        String ret = getHTML(markdownText);
-        if (null != ret) {
-            return ret;
-        }
-
-        final ExecutorService pool = Executors.newSingleThreadExecutor();
-
-        final long[] threadId = new long[1];
-
-        final Callable<String> call = new Callable<String>() {
-            @Override
-            public String call() throws Exception {
-                threadId[0] = Thread.currentThread().getId();
-
-                String ret = LANG_PROPS_SERVICE.get("contentRenderFailedLabel");
-
-                if (MARKED_AVAILABLE) {
-                    ret = toHtmlByMarked(markdownText);
-
-                    if (!StringUtils.startsWith(ret, "<p>")) {
-                        ret = "<p>" + ret + "</p>";
-                    }
-                } else {
-                    final PegDownProcessor pegDownProcessor
-                            = new PegDownProcessor(Extensions.ALL_OPTIONALS | Extensions.ALL_WITH_OPTIONALS);
-
-                    final RootNode node = pegDownProcessor.parseMarkdown(markdownText.toCharArray());
-                    ret = new ToHtmlSerializer(new LinkRenderer(), Collections.<String, VerbatimSerializer>emptyMap(),
-                            Arrays.asList(new ToHtmlSerializerPlugin[0])).toHtml(node);
-
-                    if (!StringUtils.startsWith(ret, "<p>")) {
-                        ret = "<p>" + ret + "</p>";
-                    }
-
-                    ret = formatMarkdown(ret);
-                }
-
-                // cache it
-                putHTML(markdownText, ret);
-
-                return ret;
+        final Elements inputs = doc.getElementsByTag("input");
+        for (final Element input : inputs) {
+            if (!"checkbox".equalsIgnoreCase(input.attr("type"))) {
+                input.remove();
             }
-        };
-
-        try {
-            final Future<String> future = pool.submit(call);
-
-            return future.get(MD_TIMEOUT, TimeUnit.MILLISECONDS);
-        } catch (final TimeoutException e) {
-            LOGGER.log(Level.ERROR, "Markdown timeout [md=" + markdownText + "]");
-
-            final Set<Thread> threads = Thread.getAllStackTraces().keySet();
-            for (final Thread thread : threads) {
-                if (thread.getId() == threadId[0]) {
-                    thread.stop();
-
-                    break;
-                }
-            }
-        } catch (final Exception e) {
-            LOGGER.log(Level.ERROR, "Markdown failed [md=" + markdownText + "]", e);
-        } finally {
-            pool.shutdownNow();
         }
 
-        return "";
+        String ret = doc.body().html();
+        ret = ret.replaceAll("(</?br\\s*/?>\\s*)+", "<br>"); // patch for Jsoup issue
+
+        return ret;
     }
 
     /**
@@ -283,61 +232,137 @@ public final class Markdowns {
      * 'markdownErrorLabel' if exception
      */
     public static String toHTML(final String markdownText) {
-        if (Strings.isEmptyOrNull(markdownText)) {
+        if (StringUtils.isBlank(markdownText)) {
             return "";
         }
 
-        String ret = getHTML(markdownText);
-        if (null != ret) {
-            return ret;
+        final String cachedHTML = getHTML(markdownText);
+        if (null != cachedHTML) {
+            return cachedHTML;
         }
 
+        final BeanManager beanManager = BeanManager.getInstance();
+        final LangPropsService langPropsService = beanManager.getReference(LangPropsService.class);
+        final UserQueryService userQueryService = beanManager.getReference(UserQueryService.class);
         final ExecutorService pool = Executors.newSingleThreadExecutor();
-
         final long[] threadId = new long[1];
 
-        final Callable<String> call = new Callable<String>() {
-            @Override
-            public String call() throws Exception {
-                threadId[0] = Thread.currentThread().getId();
+        final Callable<String> call = () -> {
+            threadId[0] = Thread.currentThread().getId();
 
-                String ret = LANG_PROPS_SERVICE.get("contentRenderFailedLabel");
+            String html = null;
+            if (LUTE_AVAILABLE) {
+                try {
+                    html = toHtmlByLute(markdownText);
+                } catch (final Exception e) {
+                    LOGGER.log(Level.WARN, "Failed to use [Lute] for markdown [md=" + StringUtils.substring(markdownText, 0, 256) + "]: " + e.getMessage());
+                }
+            }
 
-                if (MARKED_AVAILABLE) {
-                    ret = toHtmlByMarked(markdownText);
+            if (StringUtils.isBlank(html)) {
+                html = toHtmlByFlexmark(markdownText);
+            }
 
-                    if (!StringUtils.startsWith(ret, "<p>")) {
-                        ret = "<p>" + ret + "</p>";
+            if (!StringUtils.startsWith(html, "<p>")) {
+                html = "<p>" + html + "</p>";
+            }
+
+            final Whitelist whitelist = Whitelist.relaxed();
+            inputWhitelist(whitelist);
+            html = Jsoup.clean(html, whitelist);
+            final Document doc = Jsoup.parse(html);
+            final List<org.jsoup.nodes.Node> toRemove = new ArrayList<>();
+            doc.traverse(new NodeVisitor() {
+                @Override
+                public void head(final org.jsoup.nodes.Node node, int depth) {
+                    if (node instanceof org.jsoup.nodes.TextNode) {
+                        final org.jsoup.nodes.TextNode textNode = (org.jsoup.nodes.TextNode) node;
+                        final org.jsoup.nodes.Node parent = textNode.parent();
+
+                        if (parent instanceof Element) {
+                            final Element parentElem = (Element) parent;
+
+                            if (!parentElem.tagName().equals("code")) {
+                                String text = textNode.getWholeText();
+                                boolean nextIsBr = false;
+                                final org.jsoup.nodes.Node nextSibling = textNode.nextSibling();
+                                if (nextSibling instanceof Element) {
+                                    nextIsBr = "br".equalsIgnoreCase(((Element) nextSibling).tagName());
+                                }
+
+                                if (null != userQueryService) {
+                                    final Set<String> userNames = userQueryService.getUserNames(text);
+                                    for (final String userName : userNames) {
+                                        text = text.replace('@' + userName + (nextIsBr ? "" : " "), "@" + UserExt.getUserLink(userName));
+                                    }
+                                    text = text.replace("@participants ",
+                                            "@<a href='" + Latkes.getServePath() + "/about' target='_blank' class='ft-red'>participants</a> ");
+                                }
+
+                                if (!LUTE_AVAILABLE) {
+                                    text = Emotions.convert(text);
+                                }
+                                if (text.contains("@<a href=")) {
+                                    final List<org.jsoup.nodes.Node> nodes = Parser.parseFragment(text, parentElem, "");
+                                    final int index = textNode.siblingIndex();
+
+                                    parentElem.insertChildren(index, nodes);
+                                    toRemove.add(node);
+                                } else {
+                                    if (!LUTE_AVAILABLE) {
+                                        text = Pangu.spacingText(text);
+                                    }
+                                    textNode.text(text);
+                                }
+                            }
+                        }
                     }
-                } else {
-                    final PegDownProcessor pegDownProcessor
-                            = new PegDownProcessor(Extensions.ALL_OPTIONALS | Extensions.ALL_WITH_OPTIONALS);
-
-                    final RootNode node = pegDownProcessor.parseMarkdown(markdownText.toCharArray());
-                    ret = new ToHtmlSerializer(new LinkRenderer(), Collections.<String, VerbatimSerializer>emptyMap(),
-                            Arrays.asList(new ToHtmlSerializerPlugin[0])).toHtml(node);
-
-                    if (!StringUtils.startsWith(ret, "<p>")) {
-                        ret = "<p>" + ret + "</p>";
-                    }
-
-                    ret = formatMarkdown(ret);
                 }
 
-                // cache it
-                putHTML(markdownText, ret);
+                @Override
+                public void tail(org.jsoup.nodes.Node node, int depth) {
+                }
+            });
 
-                return ret;
-            }
+            toRemove.forEach(node -> node.remove());
+
+            doc.select("a").forEach(a -> {
+                String src = a.attr("href");
+                if (StringUtils.containsIgnoreCase(src, "javascript:")) {
+                    a.remove();
+
+                    return;
+                }
+
+                if (StringUtils.startsWithAny(src, new String[]{Latkes.getServePath(), Symphonys.UPLOAD_QINIU_DOMAIN})
+                        || StringUtils.endsWithIgnoreCase(src, ".mov")) {
+                    return;
+                }
+
+                src = URLs.encode(src);
+                a.attr("href", Latkes.getServePath() + "/forward?goto=" + src);
+                a.attr("target", "_blank");
+                a.attr("rel", "nofollow");
+            });
+            doc.outputSettings().prettyPrint(false);
+
+            String ret = doc.select("body").html();
+            ret = StringUtils.trim(ret);
+
+            // cache it
+            putHTML(markdownText, ret);
+
+            return ret;
         };
 
         Stopwatchs.start("Md to HTML");
         try {
             final Future<String> future = pool.submit(call);
 
-            return future.get(MD_TIMEOUT, TimeUnit.MILLISECONDS);
+            return future.get(Symphonys.MARKDOWN_TIMEOUT, TimeUnit.MILLISECONDS);
         } catch (final TimeoutException e) {
-            LOGGER.log(Level.ERROR, "Markdown timeout [md=" + markdownText + "]");
+            LOGGER.log(Level.ERROR, "Markdown timeout [md=" + StringUtils.substring(markdownText, 0, 256) + "]");
+            Callstacks.printCallstack(Level.ERROR, new String[]{"org.b3log"}, null);
 
             final Set<Thread> threads = Thread.getAllStackTraces().keySet();
             for (final Thread thread : threads) {
@@ -348,658 +373,41 @@ public final class Markdowns {
                 }
             }
         } catch (final Exception e) {
-            LOGGER.log(Level.ERROR, "Markdown failed [md=" + markdownText + "]", e);
+            LOGGER.log(Level.ERROR, "Markdown failed [md=" + StringUtils.substring(markdownText, 0, 256) + "]", e);
         } finally {
             pool.shutdownNow();
 
             Stopwatchs.end();
         }
 
-        return LANG_PROPS_SERVICE.get("contentRenderFailedLabel");
+        return langPropsService.get("contentRenderFailedLabel");
     }
 
-    private static String toHtmlByMarked(final String markdownText) throws Exception {
-        final URL url = new URL(MARKED_ENGINE_URL);
+    private static String toHtmlByLute(final String markdownText) throws Exception {
+        final URL url = new URL(LUTE_ENGINE_URL);
         final HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setConnectTimeout(1000);
+        conn.setReadTimeout(7000);
         conn.setDoOutput(true);
 
-        final OutputStream outputStream = conn.getOutputStream();
-        IOUtils.write(markdownText, outputStream, "UTF-8");
-        IOUtils.closeQuietly(outputStream);
+        try (final OutputStream outputStream = conn.getOutputStream()) {
+            IOUtils.write(markdownText, outputStream, "UTF-8");
+        }
 
-        final InputStream inputStream = conn.getInputStream();
-        final String html = IOUtils.toString(inputStream, "UTF-8");
-        IOUtils.closeQuietly(inputStream);
+        String ret;
+        try (final InputStream inputStream = conn.getInputStream()) {
+            ret = IOUtils.toString(inputStream, "UTF-8");
+        }
 
         conn.disconnect();
 
-        // Pangu space
-        final Document doc = Jsoup.parse(html);
-        doc.traverse(new NodeVisitor() {
-            @Override
-            public void head(final org.jsoup.nodes.Node node, int depth) {
-                if (node instanceof org.jsoup.nodes.TextNode) {
-                    // final org.jsoup.nodes.TextNode textNode = (org.jsoup.nodes.TextNode) node;
-
-                    // textNode.text(Pangu.spacingText(textNode.getWholeText()));
-                    // FIXME: Pangu space
-                }
-            }
-
-            @Override
-            public void tail(org.jsoup.nodes.Node node, int depth) {
-            }
-        });
-
-        doc.outputSettings().prettyPrint(false);
-
-        String ret = doc.html();
-        ret = StringUtils.substringBetween(ret, "<body>", "</body>");
-        ret = StringUtils.trim(ret);
-
         return ret;
     }
 
-    /**
-     * See https://github.com/b3log/symphony/issues/306.
-     *
-     * @param markdownText
-     * @param tag
-     * @return
-     */
-    private static String formatMarkdown(final String markdownText) {
-        String ret = markdownText;
-        final Document doc = Jsoup.parse(markdownText, "", Parser.xmlParser());
-        final Elements tagA = doc.select("a");
-        for (int i = 0; i < tagA.size(); i++) {
-            final String search = tagA.get(i).attr("href");
-            final String replace = StringUtils.replace(search, "_", "[downline]");
-            ret = StringUtils.replace(ret, search, replace);
-        }
-        final Elements tagImg = doc.select("img");
-        for (int i = 0; i < tagImg.size(); i++) {
-            final String search = tagImg.get(i).attr("src");
-            final String replace = StringUtils.replace(search, "_", "[downline]");
-            ret = StringUtils.replace(ret, search, replace);
-        }
-        final Elements tagCode = doc.select("code");
-        for (int i = 0; i < tagCode.size(); i++) {
-            final String search = tagCode.get(i).html();
-            final String replace = StringUtils.replace(search, "_", "[downline]");
-            ret = StringUtils.replace(ret, search, replace);
-        }
+    private static String toHtmlByFlexmark(final String markdownText) {
+        com.vladsch.flexmark.util.ast.Node document = PARSER.parse(markdownText);
 
-        String[] rets = ret.split("\n");
-        for (String temp : rets) {
-            final String[] toStrong = StringUtils.substringsBetween(temp, "**", "**");
-            final String[] toEm = StringUtils.substringsBetween(temp, "_", "_");
-            if (toStrong != null && toStrong.length > 0) {
-                for (final String strong : toStrong) {
-                    final String search = "**" + strong + "**";
-                    final String replace = "<strong>" + strong + "</strong>";
-                    ret = StringUtils.replace(ret, search, replace);
-                }
-            }
-            if (toEm != null && toEm.length > 0) {
-                for (final String em : toEm) {
-                    final String search = "_" + em + "_";
-                    final String replace = "<em>" + em + "<em>";
-                    ret = StringUtils.replace(ret, search, replace);
-                }
-            }
-        }
-        ret = StringUtils.replace(ret, "[downline]", "_");
-        return ret;
-    }
-
-    /**
-     * Enhanced with {@link Pangu} for text node.
-     */
-    private static class ToHtmlSerializer implements Visitor {
-
-        protected Printer printer = new Printer();
-
-        protected final Map<String, ReferenceNode> references = new HashMap<String, ReferenceNode>();
-
-        protected final Map<String, String> abbreviations = new HashMap<String, String>();
-
-        protected final LinkRenderer linkRenderer;
-
-        protected final List<ToHtmlSerializerPlugin> plugins;
-
-        protected TableNode currentTableNode;
-
-        protected int currentTableColumn;
-
-        protected boolean inTableHeader;
-
-        protected Map<String, VerbatimSerializer> verbatimSerializers;
-
-        public ToHtmlSerializer(LinkRenderer linkRenderer) {
-            this(linkRenderer, Collections.<ToHtmlSerializerPlugin>emptyList());
-        }
-
-        public ToHtmlSerializer(LinkRenderer linkRenderer, List<ToHtmlSerializerPlugin> plugins) {
-            this(linkRenderer, Collections.<String, VerbatimSerializer>emptyMap(), plugins);
-        }
-
-        public ToHtmlSerializer(final LinkRenderer linkRenderer, final Map<String, VerbatimSerializer> verbatimSerializers) {
-            this(linkRenderer, verbatimSerializers, Collections.<ToHtmlSerializerPlugin>emptyList());
-        }
-
-        public ToHtmlSerializer(final LinkRenderer linkRenderer, final Map<String, VerbatimSerializer> verbatimSerializers, final List<ToHtmlSerializerPlugin> plugins) {
-            this.linkRenderer = linkRenderer;
-            this.verbatimSerializers = new HashMap<>(verbatimSerializers);
-            if (!this.verbatimSerializers.containsKey(VerbatimSerializer.DEFAULT)) {
-                this.verbatimSerializers.put(VerbatimSerializer.DEFAULT, DefaultVerbatimSerializer.INSTANCE);
-            }
-            this.plugins = plugins;
-        }
-
-        public String toHtml(RootNode astRoot) {
-            checkArgNotNull(astRoot, "astRoot");
-            astRoot.accept(this);
-            return printer.getString();
-        }
-
-        public void visit(RootNode node) {
-            for (ReferenceNode refNode : node.getReferences()) {
-                visitChildren(refNode);
-                references.put(normalize(printer.getString()), refNode);
-                printer.clear();
-            }
-            for (AbbreviationNode abbrNode : node.getAbbreviations()) {
-                visitChildren(abbrNode);
-                String abbr = printer.getString();
-                printer.clear();
-                abbrNode.getExpansion().accept(this);
-                String expansion = printer.getString();
-                abbreviations.put(abbr, expansion);
-                printer.clear();
-            }
-            visitChildren(node);
-        }
-
-        public void visit(AbbreviationNode node) {
-        }
-
-        public void visit(AnchorLinkNode node) {
-            printLink(linkRenderer.render(node));
-        }
-
-        public void visit(AutoLinkNode node) {
-            printLink(linkRenderer.render(node));
-        }
-
-        public void visit(BlockQuoteNode node) {
-            printIndentedTag(node, "blockquote");
-        }
-
-        public void visit(BulletListNode node) {
-            printIndentedTag(node, "ul");
-        }
-
-        public void visit(CodeNode node) {
-            printTag(node, "code");
-        }
-
-        public void visit(DefinitionListNode node) {
-            printIndentedTag(node, "dl");
-        }
-
-        public void visit(DefinitionNode node) {
-            printConditionallyIndentedTag(node, "dd");
-        }
-
-        public void visit(DefinitionTermNode node) {
-            printConditionallyIndentedTag(node, "dt");
-        }
-
-        public void visit(ExpImageNode node) {
-            String text = printChildrenToString(node);
-            printImageTag(linkRenderer.render(node, text));
-        }
-
-        public void visit(ExpLinkNode node) {
-            String text = printChildrenToString(node);
-            printLink(linkRenderer.render(node, text));
-        }
-
-        public void visit(HeaderNode node) {
-            printBreakBeforeTag(node, "h" + node.getLevel());
-        }
-
-        public void visit(HtmlBlockNode node) {
-            String text = node.getText();
-            if (text.length() > 0) {
-                printer.println();
-            }
-            printer.print(text);
-        }
-
-        public void visit(InlineHtmlNode node) {
-            printer.print(node.getText());
-        }
-
-        public void visit(ListItemNode node) {
-            if (node instanceof TaskListNode) {
-                // vsch: #185 handle GitHub style task list items, these are a bit messy because the <input> checkbox needs to be
-                // included inside the optional <p></p> first grand-child of the list item, first child is always RootNode
-                // because the list item text is recursively parsed.
-                Node firstChild = node.getChildren().get(0).getChildren().get(0);
-                boolean firstIsPara = firstChild instanceof ParaNode;
-                int indent = node.getChildren().size() > 1 ? 2 : 0;
-                boolean startWasNewLine = printer.endsWithNewLine();
-
-                printer.println().print("<li class=\"task-list-item\">").indent(indent);
-                if (firstIsPara) {
-                    printer.println().print("<p>");
-                    printer.print("<input type=\"checkbox\" class=\"task-list-item-checkbox\"" + (((TaskListNode) node).isDone() ? " checked=\"checked\"" : "") + " disabled=\"disabled\"></input>");
-                    visitChildren((SuperNode) firstChild);
-
-                    // render the other children, the p tag is taken care of here
-                    visitChildrenSkipFirst(node);
-                    printer.print("</p>");
-                } else {
-                    printer.print("<input type=\"checkbox\" class=\"task-list-item-checkbox\"" + (((TaskListNode) node).isDone() ? " checked=\"checked\"" : "") + " disabled=\"disabled\"></input>");
-                    visitChildren(node);
-                }
-                printer.indent(-indent).printchkln(indent != 0).print("</li>")
-                        .printchkln(startWasNewLine);
-            } else {
-                printConditionallyIndentedTag(node, "li");
-            }
-        }
-
-        public void visit(MailLinkNode node) {
-            printLink(linkRenderer.render(node));
-        }
-
-        public void visit(OrderedListNode node) {
-            printIndentedTag(node, "ol");
-        }
-
-        public void visit(ParaNode node) {
-            printBreakBeforeTag(node, "p");
-        }
-
-        public void visit(QuotedNode node) {
-            switch (node.getType()) {
-                case DoubleAngle:
-                    printer.print("&laquo;");
-                    visitChildren(node);
-                    printer.print("&raquo;");
-                    break;
-                case Double:
-                    printer.print("&ldquo;");
-                    visitChildren(node);
-                    printer.print("&rdquo;");
-                    break;
-                case Single:
-                    printer.print("&lsquo;");
-                    visitChildren(node);
-                    printer.print("&rsquo;");
-                    break;
-            }
-        }
-
-        public void visit(ReferenceNode node) {
-            // reference nodes are not printed
-        }
-
-        public void visit(RefImageNode node) {
-            String text = printChildrenToString(node);
-            String key = node.referenceKey != null ? printChildrenToString(node.referenceKey) : text;
-            ReferenceNode refNode = references.get(normalize(key));
-            if (refNode == null) { // "fake" reference image link
-                printer.print("![").print(text).print(']');
-                if (node.separatorSpace != null) {
-                    printer.print(node.separatorSpace).print('[');
-                    if (node.referenceKey != null) {
-                        printer.print(key);
-                    }
-                    printer.print(']');
-                }
-            } else {
-                printImageTag(linkRenderer.render(node, refNode.getUrl(), refNode.getTitle(), text));
-            }
-        }
-
-        public void visit(RefLinkNode node) {
-            String text = printChildrenToString(node);
-            String key = node.referenceKey != null ? printChildrenToString(node.referenceKey) : text;
-            ReferenceNode refNode = references.get(normalize(key));
-            if (refNode == null) { // "fake" reference link
-                printer.print('[').print(text).print(']');
-                if (node.separatorSpace != null) {
-                    printer.print(node.separatorSpace).print('[');
-                    if (node.referenceKey != null) {
-                        printer.print(key);
-                    }
-                    printer.print(']');
-                }
-            } else {
-                printLink(linkRenderer.render(node, refNode.getUrl(), refNode.getTitle(), text));
-            }
-        }
-
-        public void visit(SimpleNode node) {
-            switch (node.getType()) {
-                case Apostrophe:
-                    printer.print("&rsquo;");
-                    break;
-                case Ellipsis:
-                    printer.print("&hellip;");
-                    break;
-                case Emdash:
-                    printer.print("&mdash;");
-                    break;
-                case Endash:
-                    printer.print("&ndash;");
-                    break;
-                case HRule:
-                    printer.println().print("<hr/>");
-                    break;
-                case Linebreak:
-                    printer.print("<br/>");
-                    break;
-                case Nbsp:
-                    printer.print("&nbsp;");
-                    break;
-                default:
-                    throw new IllegalStateException();
-            }
-        }
-
-        public void visit(StrongEmphSuperNode node) {
-            if (node.isClosed()) {
-                if (node.isStrong()) {
-                    printTag(node, "strong");
-                } else {
-                    printTag(node, "em");
-                }
-            } else {
-                //sequence was not closed, treat open chars as ordinary chars
-                printer.print(node.getChars());
-                visitChildren(node);
-            }
-        }
-
-        public void visit(StrikeNode node) {
-            printTag(node, "del");
-        }
-
-        public void visit(TableBodyNode node) {
-            printIndentedTag(node, "tbody");
-        }
-
-        @Override
-        public void visit(TableCaptionNode node) {
-            printer.println().print("<caption>");
-            visitChildren(node);
-            printer.print("</caption>");
-        }
-
-        public void visit(TableCellNode node) {
-            String tag = inTableHeader ? "th" : "td";
-            List<TableColumnNode> columns = currentTableNode.getColumns();
-            TableColumnNode column = columns.get(Math.min(currentTableColumn, columns.size() - 1));
-
-            printer.println().print('<').print(tag);
-            column.accept(this);
-            if (node.getColSpan() > 1) {
-                printer.print(" colspan=\"").print(Integer.toString(node.getColSpan())).print('"');
-            }
-            printer.print('>');
-            visitChildren(node);
-            printer.print('<').print('/').print(tag).print('>');
-
-            currentTableColumn += node.getColSpan();
-        }
-
-        public void visit(TableColumnNode node) {
-            switch (node.getAlignment()) {
-                case None:
-                    break;
-                case Left:
-                    printer.print(" align=\"left\"");
-                    break;
-                case Right:
-                    printer.print(" align=\"right\"");
-                    break;
-                case Center:
-                    printer.print(" align=\"center\"");
-                    break;
-                default:
-                    throw new IllegalStateException();
-            }
-        }
-
-        public void visit(TableHeaderNode node) {
-            inTableHeader = true;
-            printIndentedTag(node, "thead");
-            inTableHeader = false;
-        }
-
-        public void visit(TableNode node) {
-            currentTableNode = node;
-            printIndentedTag(node, "table");
-            currentTableNode = null;
-        }
-
-        public void visit(TableRowNode node) {
-            currentTableColumn = 0;
-            printIndentedTag(node, "tr");
-        }
-
-        public void visit(VerbatimNode node) {
-            VerbatimSerializer serializer = lookupSerializer(node.getType());
-            serializer.serialize(node, printer);
-        }
-
-        protected VerbatimSerializer lookupSerializer(final String type) {
-            if (type != null && verbatimSerializers.containsKey(type)) {
-                return verbatimSerializers.get(type);
-            } else {
-                return verbatimSerializers.get(VerbatimSerializer.DEFAULT);
-            }
-        }
-
-        public void visit(WikiLinkNode node) {
-            printLink(linkRenderer.render(node));
-        }
-
-        public void visit(TextNode node) {
-            if (abbreviations.isEmpty()) {
-                printer.print(Pangu.spacingText(node.getText()));
-            } else {
-                printWithAbbreviations(node.getText());
-            }
-        }
-
-        public void visit(SpecialTextNode node) {
-            printer.printEncoded(node.getText());
-        }
-
-        public void visit(SuperNode node) {
-            visitChildren(node);
-        }
-
-        public void visit(Node node) {
-            for (ToHtmlSerializerPlugin plugin : plugins) {
-                if (plugin.visit(node, this, printer)) {
-                    return;
-                }
-            }
-            // override this method for processing custom Node implementations
-            throw new RuntimeException("Don't know how to handle node " + node);
-        }
-
-        // helpers
-        protected void visitChildren(SuperNode node) {
-            for (Node child : node.getChildren()) {
-                child.accept(this);
-            }
-        }
-
-        // helpers
-        protected void visitChildrenSkipFirst(SuperNode node) {
-            boolean first = true;
-            for (Node child : node.getChildren()) {
-                if (!first) {
-                    child.accept(this);
-                }
-                first = false;
-            }
-        }
-
-        protected void printTag(TextNode node, String tag) {
-            printer.print('<').print(tag).print('>');
-            printer.printEncoded(node.getText());
-            printer.print('<').print('/').print(tag).print('>');
-        }
-
-        protected void printTag(SuperNode node, String tag) {
-            printer.print('<').print(tag).print('>');
-            visitChildren(node);
-            printer.print('<').print('/').print(tag).print('>');
-        }
-
-        protected void printBreakBeforeTag(SuperNode node, String tag) {
-            boolean startWasNewLine = printer.endsWithNewLine();
-            printer.println();
-            printTag(node, tag);
-            if (startWasNewLine) {
-                printer.println();
-            }
-        }
-
-        protected void printIndentedTag(SuperNode node, String tag) {
-            printer.println().print('<').print(tag).print('>').indent(+2);
-            visitChildren(node);
-            printer.indent(-2).println().print('<').print('/').print(tag).print('>');
-        }
-
-        protected void printConditionallyIndentedTag(SuperNode node, String tag) {
-            if (node.getChildren().size() > 1) {
-                printer.println().print('<').print(tag).print('>').indent(+2);
-                visitChildren(node);
-                printer.indent(-2).println().print('<').print('/').print(tag).print('>');
-            } else {
-                boolean startWasNewLine = printer.endsWithNewLine();
-
-                printer.println().print('<').print(tag).print('>');
-                visitChildren(node);
-                printer.print('<').print('/').print(tag).print('>').printchkln(startWasNewLine);
-            }
-        }
-
-        protected void printImageTag(LinkRenderer.Rendering rendering) {
-            printer.print("<img");
-            printAttribute("src", rendering.href);
-            // shouldn't include the alt attribute if its empty
-            if (!rendering.text.equals("")) {
-                printAttribute("alt", rendering.text);
-            }
-            for (LinkRenderer.Attribute attr : rendering.attributes) {
-                printAttribute(attr.name, attr.value);
-            }
-            printer.print(" />");
-        }
-
-        protected void printLink(LinkRenderer.Rendering rendering) {
-            printer.print('<').print('a');
-            printAttribute("href", rendering.href);
-            for (LinkRenderer.Attribute attr : rendering.attributes) {
-                printAttribute(attr.name, attr.value);
-            }
-            printer.print('>').print(rendering.text).print("</a>");
-        }
-
-        protected void printAttribute(String name, String value) {
-            printer.print(' ').print(name).print('=').print('"').print(value).print('"');
-        }
-
-        protected String printChildrenToString(SuperNode node) {
-            Printer priorPrinter = printer;
-            printer = new Printer();
-            visitChildren(node);
-            String result = printer.getString();
-            printer = priorPrinter;
-            return result;
-        }
-
-        protected String normalize(String string) {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < string.length(); i++) {
-                char c = string.charAt(i);
-                switch (c) {
-                    case ' ':
-                    case '\n':
-                    case '\t':
-                        continue;
-                }
-                sb.append(Character.toLowerCase(c));
-            }
-            return sb.toString();
-        }
-
-        protected void printWithAbbreviations(String string) {
-            Map<Integer, Map.Entry<String, String>> expansions = null;
-
-            for (Map.Entry<String, String> entry : abbreviations.entrySet()) {
-                // first check, whether we have a legal match
-                String abbr = entry.getKey();
-
-                int ix = 0;
-                while (true) {
-                    int sx = string.indexOf(abbr, ix);
-                    if (sx == -1) {
-                        break;
-                    }
-
-                    // only allow whole word matches
-                    ix = sx + abbr.length();
-
-                    if (sx > 0 && Character.isLetterOrDigit(string.charAt(sx - 1))) {
-                        continue;
-                    }
-                    if (ix < string.length() && Character.isLetterOrDigit(string.charAt(ix))) {
-                        continue;
-                    }
-
-                    // ok, legal match so save an expansions "task" for all matches
-                    if (expansions == null) {
-                        expansions = new TreeMap<Integer, Map.Entry<String, String>>();
-                    }
-                    expansions.put(sx, entry);
-                }
-            }
-
-            if (expansions != null) {
-                int ix = 0;
-                for (Map.Entry<Integer, Map.Entry<String, String>> entry : expansions.entrySet()) {
-                    int sx = entry.getKey();
-                    String abbr = entry.getValue().getKey();
-                    String expansion = entry.getValue().getValue();
-
-                    printer.printEncoded(string.substring(ix, sx));
-                    printer.print("<abbr");
-                    if (org.parboiled.common.StringUtils.isNotEmpty(expansion)) {
-                        printer.print(" title=\"");
-                        printer.printEncoded(expansion);
-                        printer.print('"');
-                    }
-                    printer.print('>');
-                    printer.printEncoded(abbr);
-                    printer.print("</abbr>");
-                    ix = sx + abbr.length();
-                }
-                printer.print(string.substring(ix));
-            } else {
-                printer.print(string);
-            }
-        }
+        return RENDERER.render(document);
     }
 
     /**
@@ -1009,26 +417,45 @@ public final class Markdowns {
      * @return HTML
      */
     private static String getHTML(final String markdownText) {
-        final String hash = MD5.hash(markdownText);
+        final String hash = DigestUtils.md5Hex(markdownText);
+        final JSONObject value = MD_CACHE.get(hash);
+        if (null == value) {
+            return null;
+        }
 
-        return (String) MD_CACHE.get(hash);
+        return value.optString(Common.DATA);
     }
 
     /**
      * Puts the specified HTML into cache.
      *
      * @param markdownText the specified markdown text
-     * @param html the specified HTML
+     * @param html         the specified HTML
      */
     private static void putHTML(final String markdownText, final String html) {
-        final String hash = MD5.hash(markdownText);
-
-        MD_CACHE.put(hash, html);
+        final String hash = DigestUtils.md5Hex(markdownText);
+        final JSONObject value = new JSONObject();
+        value.put(Common.DATA, html);
+        MD_CACHE.put(hash, value);
     }
 
-    /**
-     * Private constructor.
-     */
-    private Markdowns() {
+    private static void inputWhitelist(final Whitelist whitelist) {
+        whitelist.addTags("span", "hr", "kbd", "samp", "tt", "del", "s", "strike", "u", "details", "summary").
+                addAttributes("iframe", "src", "width", "height", "border", "marginwidth", "marginheight").
+                addAttributes("audio", "controls", "src").
+                addAttributes("video", "controls", "src", "width", "height").
+                addAttributes("source", "src", "media", "type").
+                addAttributes("object", "width", "height", "data", "type").
+                addAttributes("param", "name", "value").
+                addAttributes("input", "type", "disabled", "checked").
+                addAttributes("embed", "src", "type", "width", "height", "wmode", "allowNetworking").
+                addAttributes("pre", "class").
+                addAttributes("code", "class").
+                addAttributes("div", "class").
+                addAttributes("span", "class").
+                addAttributes("p", "align");
+        for (int i = 1; i <= 6; i++) {
+            whitelist.addAttributes("h" + i, "align");
+        }
     }
 }

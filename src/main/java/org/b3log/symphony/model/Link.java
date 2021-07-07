@@ -1,19 +1,19 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2016,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.model;
 
@@ -21,7 +21,7 @@ package org.b3log.symphony.model;
  * This class defines all link model relevant keys.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.0.0.0, Sep 7, 2016
+ * @version 1.4.0.0, Oct 1, 2018
  * @since 1.6.0
  */
 public final class Link {
@@ -37,6 +37,11 @@ public final class Link {
     public static final String LINKS = "links";
 
     /**
+     * Key of link address hash.
+     */
+    public static final String LINK_ADDR_HASH = "linkAddrHash";
+
+    /**
      * Key of link address.
      */
     public static final String LINK_ADDR = "linkAddr";
@@ -45,11 +50,6 @@ public final class Link {
      * Key of link title.
      */
     public static final String LINK_TITLE = "linkTitle";
-
-    /**
-     * Key of link type.
-     */
-    public static final String LINK_TYPE = "linkType";
 
     /**
      * Key of link submit count.
@@ -81,12 +81,27 @@ public final class Link {
      */
     public static final String LINK_SCORE = "linkScore";
 
-    //// Transient ////
     /**
-     * Key of link id.
+     * Key of link ping count.
      */
-    public static final String LINK_T_ID = "linkId";
+    public static final String LINK_PING_CNT = "linkPingCnt";
 
+    /**
+     * Key of link ping error count.
+     */
+    public static final String LINK_PING_ERR_CNT = "linkPingErrCnt";
+
+    /**
+     * Key of link ping time.
+     */
+    public static final String LINK_PING_TIME = "linkPingTime";
+
+    /**
+     * Key of link card HTML.
+     */
+    public static final String LINK_CARD_HTML = "linkCardHTML";
+
+    //// Transient ////
     /**
      * Key of link keywords.
      */
@@ -107,11 +122,35 @@ public final class Link {
      */
     public static final String LINK_T_COUNT = "linkCnt";
 
-    //// Type constants
     /**
-     * Link type - forge.
+     * Key of link description.
      */
-    public static final int LINK_TYPE_C_FORGE = 0;
+    public static final String LINK_T_DESCRIPTION = "linkDescription";
+
+    /**
+     * Key of link image.
+     */
+    public static final String LINK_T_IMAGE = "linkImage";
+
+    /**
+     * Key of link site.
+     */
+    public static final String LINK_T_SITE = "linkSite";
+
+    /**
+     * Key of link site domain.
+     */
+    public static final String LINK_T_SITE_DOMAIN = "linkSiteDomain";
+
+    /**
+     * Key of link site address.
+     */
+    public static final String LINK_T_SITE_ADDR = "linkSiteAddr";
+
+    /**
+     * Key of link site icon.
+     */
+    public static final String LINK_T_SITE_ICON = "linkSiteIcon";
 
     /**
      * Private constructor.

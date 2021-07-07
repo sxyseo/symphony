@@ -1,27 +1,31 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2016,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.model;
+
+import org.apache.commons.lang.StringUtils;
+import org.json.JSONObject;
 
 /**
  * This class defines all article model relevant keys.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.21.0.12, Nov 19, 2016
+ * @author <a href="https://qiankunpingtai.cn">qiankunpingtai</a>
+ * @version 1.34.0.3, May 20, 2019
  * @since 0.2.0
  */
 public final class Article {
@@ -62,11 +66,6 @@ public final class Article {
     public static final String ARTICLE_TAGS = "articleTags";
 
     /**
-     * Key of article author email.
-     */
-    public static final String ARTICLE_AUTHOR_EMAIL = "articleAuthorEmail";
-
-    /**
      * Key of article author id.
      */
     public static final String ARTICLE_AUTHOR_ID = "articleAuthorId";
@@ -92,14 +91,29 @@ public final class Article {
     public static final String ARTICLE_CREATE_TIME = "articleCreateTime";
 
     /**
+     * Key of article create time str.
+     */
+    public static final String ARTICLE_CREATE_TIME_STR = "articleCreateTimeStr";
+
+    /**
      * Key of article update time.
      */
     public static final String ARTICLE_UPDATE_TIME = "articleUpdateTime";
 
     /**
+     * Key of article update time str.
+     */
+    public static final String ARTICLE_UPDATE_TIME_STR = "articleUpdateTimeStr";
+
+    /**
      * Key of article latest comment time.
      */
     public static final String ARTICLE_LATEST_CMT_TIME = "articleLatestCmtTime";
+
+    /**
+     * Key of article latest comment time str.
+     */
+    public static final String ARTICLE_LATEST_CMT_TIME_STR = "articleLatestCmtTimeStr";
 
     /**
      * Key of article latest commenter name.
@@ -117,21 +131,6 @@ public final class Article {
     public static final String ARTICLE_COMMENTABLE = "articleCommentable";
 
     /**
-     * Key of article sync to client.
-     */
-    public static final String ARTICLE_SYNC_TO_CLIENT = "syncWithSymphonyClient";
-
-    /**
-     * Key of client article id.
-     */
-    public static final String ARTICLE_CLIENT_ARTICLE_ID = "clientArticleId";
-
-    /**
-     * Key of client article permalink.
-     */
-    public static final String ARTICLE_CLIENT_ARTICLE_PERMALINK = "clientArticlePermalink";
-
-    /**
      * Key of article editor type.
      */
     public static final String ARTICLE_EDITOR_TYPE = "articleEditorType";
@@ -147,6 +146,11 @@ public final class Article {
     public static final String ARTICLE_TYPE = "articleType";
 
     /**
+     * Key of article thank count.
+     */
+    public static final String ARTICLE_THANK_CNT = "articleThankCnt";
+
+    /**
      * Key of article good count.
      */
     public static final String ARTICLE_GOOD_CNT = "articleGoodCnt";
@@ -160,6 +164,11 @@ public final class Article {
      * Key of article collection count.
      */
     public static final String ARTICLE_COLLECT_CNT = "articleCollectCnt";
+
+    /**
+     * Key of article watch count.
+     */
+    public static final String ARTICLE_WATCH_CNT = "articleWatchCnt";
 
     /**
      * Key of reddit score.
@@ -201,7 +210,32 @@ public final class Article {
      */
     public static final String ARTICLE_ANONYMOUS_VIEW = "articleAnonymousView";
 
+    /**
+     * Key of article audio URL.
+     */
+    public static final String ARTICLE_AUDIO_URL = "articleAudioURL";
+
+    /**
+     * Key of article qna offer point. https://github.com/b3log/symphony/issues/486
+     */
+    public static final String ARTICLE_QNA_OFFER_POINT = "articleQnAOfferPoint";
+
+    /**
+     * Key of article push order. https://github.com/b3log/symphony/issues/537
+     */
+    public static final String ARTICLE_PUSH_ORDER = "articlePushOrder";
+
+    /**
+     * Key of article image1 URL. https://github.com/b3log/symphony/issues/705
+     */
+    public static final String ARTICLE_IMG1_URL = "articleImg1URL";
+
     //// Transient ////
+    /**
+     * Key of article revision count.
+     */
+    public static final String ARTICLE_REVISION_COUNT = "articleRevisionCount";
+
     /**
      * Key of article latest comment.
      */
@@ -241,6 +275,11 @@ public final class Article {
      * Key of article preview content.
      */
     public static final String ARTICLE_T_PREVIEW_CONTENT = "articlePreviewContent";
+
+    /**
+     * Key of article thumbnail URL.
+     */
+    public static final String ARTICLE_T_THUMBNAIL_URL = "articleThumbnailURL";
 
     /**
      * Key of article view count display format.
@@ -293,6 +332,11 @@ public final class Article {
     public static final String ARTICLE_T_NICE_COMMENTS = "articleNiceComments";
 
     /**
+     * Key of article offered (accepted) comment(answer).
+     */
+    public static final String ARTICLE_T_OFFERED_COMMENT = "articleOfferedComment";
+
+    /**
      * Key of article participants.
      */
     public static final String ARTICLE_T_PARTICIPANTS = "articleParticipants";
@@ -308,24 +352,19 @@ public final class Article {
     public static final String ARTICLE_T_PARTICIPANT_THUMBNAIL_URL = "articleParticipantThumbnailURL";
 
     /**
-     * Key of article participant thumbnail update time.
-     */
-    public static final String ARTICLE_T_PARTICIPANT_THUMBNAIL_UPDATE_TIME = "articleParticipantThumbnailUpdateTime";
-
-    /**
      * Key of article participant URL.
      */
     public static final String ARTICLE_T_PARTICIPANT_URL = "articleParticipantURL";
 
     /**
-     * Key of is broadcast.
-     */
-    public static final String ARTICLE_T_IS_BROADCAST = "articleIsBroadcast";
-
-    /**
      * Key of article title with Emoj.
      */
     public static final String ARTICLE_T_TITLE_EMOJI = "articleTitleEmoj";
+
+    /**
+     * Key of article title with Emoji unicode.
+     */
+    public static final String ARTICLE_T_TITLE_EMOJI_UNICODE = "articleTitleEmojUnicode";
 
     /**
      * Key of article heat.
@@ -336,6 +375,21 @@ public final class Article {
      * Key of article ToC.
      */
     public static final String ARTICLE_T_TOC = "articleToC";
+
+    /**
+     * Key of article original content.
+     */
+    public static final String ARTICLE_T_ORIGINAL_CONTENT = "articleOriginalContent";
+
+    /**
+     * Key of flag of notifying followers.
+     */
+    public static final String ARTICLE_T_NOTIFY_FOLLOWERS = "articleNotifyFollowers";
+
+    /**
+     * Key of article show in list. https://github.com/b3log/symphony/issues/927
+     */
+    public static final String ARTICLE_SHOW_IN_LIST = "articleShowInList";
 
     // Anonymous constants
     /**
@@ -386,6 +440,11 @@ public final class Article {
      */
     public static final int ARTICLE_STATUS_C_INVALID = 1;
 
+    /**
+     * Article status - locked.
+     */
+    public static final int ARTICLE_STATUS_C_LOCKED = 2;
+
     // Type constants
     /**
      * Article type - normal.
@@ -408,13 +467,58 @@ public final class Article {
     public static final int ARTICLE_TYPE_C_THOUGHT = 3;
 
     /**
+     * Article type - <a href="https://github.com/b3log/symphony/issues/486">QnA</a>.
+     */
+    public static final int ARTICLE_TYPE_C_QNA = 5;
+
+    // Show in list constants
+    /**
+     * Article show in list - not.
+     */
+    public static final Integer ARTICLE_SHOW_IN_LIST_C_NOT = 0;
+
+    /**
+     * Article show in list - yes.
+     */
+    public static final Integer ARTICLE_SHOW_IN_LIST_C_YES = 1;
+
+    /**
+     * Checks the specified article1 is different from the specified article2.
+     *
+     * @param a1 the specified article1
+     * @param a2 the specified article2
+     * @return {@code true} if they are different, otherwise returns {@code false}
+     */
+    public static boolean isDifferent(final JSONObject a1, final JSONObject a2) {
+        final String title1 = a1.optString(Article.ARTICLE_TITLE);
+        final String title2 = a2.optString(Article.ARTICLE_TITLE);
+        if (!StringUtils.equalsIgnoreCase(title1, title2)) {
+            return true;
+        }
+
+        final String tags1 = a1.optString(Article.ARTICLE_TAGS);
+        final String tags2 = a2.optString(Article.ARTICLE_TAGS);
+        if (!StringUtils.equalsIgnoreCase(tags1, tags2)) {
+            return true;
+        }
+
+        final String content1 = a1.optString(Article.ARTICLE_CONTENT);
+        final String content2 = a2.optString(Article.ARTICLE_CONTENT);
+        if (!StringUtils.equalsIgnoreCase(content1, content2)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Checks the specified article type is whether invalid.
      *
      * @param articleType the specified article type
      * @return {@code true} if it is invalid, otherwise returns {@code false}
      */
     public static boolean isInvalidArticleType(final int articleType) {
-        return articleType < 0 || articleType > Article.ARTICLE_TYPE_C_THOUGHT;
+        return articleType < 0 || articleType > Article.ARTICLE_TYPE_C_QNA;
     }
 
     /**

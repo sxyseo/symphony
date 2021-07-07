@@ -1,40 +1,29 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2016,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import javax.inject.Inject;
 import org.b3log.latke.Keys;
 import org.b3log.latke.Latkes;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.User;
-import org.b3log.latke.repository.CompositeFilter;
-import org.b3log.latke.repository.CompositeFilterOperator;
-import org.b3log.latke.repository.Filter;
-import org.b3log.latke.repository.FilterOperator;
-import org.b3log.latke.repository.PropertyFilter;
-import org.b3log.latke.repository.Query;
-import org.b3log.latke.repository.RepositoryException;
+import org.b3log.latke.repository.*;
 import org.b3log.latke.repository.annotation.Transactional;
 import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.ServiceException;
@@ -47,11 +36,13 @@ import org.b3log.symphony.util.Mails;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.*;
+
 /**
  * Verifycode management service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.1.0.4, Oct 28, 2016
+ * @version 1.2.0.1, Jun 12, 2018
  * @since 1.3.0
  */
 @Service
@@ -60,7 +51,7 @@ public class VerifycodeMgmtService {
     /**
      * Logger.
      */
-    private static final Logger LOGGER = Logger.getLogger(VerifycodeMgmtService.class.getName());
+    private static final Logger LOGGER = Logger.getLogger(VerifycodeMgmtService.class);
 
     /**
      * Verifycode repository.
@@ -81,20 +72,38 @@ public class VerifycodeMgmtService {
     private LangPropsService langPropsService;
 
     /**
+     * Removes a verifycode with the specified code.
+     *
+     * @param code the specified code
+     */
+    @Transactional
+    public void removeByCode(final String code) {
+        final Query query = new Query().setFilter(new PropertyFilter(Verifycode.CODE, FilterOperator.EQUAL, code));
+        try {
+            final JSONArray results = verifycodeRepository.get(query).optJSONArray(Keys.RESULTS);
+            if (1 > results.length()) {
+                return;
+            }
+
+            verifycodeRepository.remove(results.optJSONObject(0).optString(Keys.OBJECT_ID));
+        } catch (final Exception e) {
+            LOGGER.log(Level.ERROR, "Removes by code [" + code + "] failed", e);
+        }
+    }
+
+    /**
      * Adds a verifycode with the specified request json object.
      *
-     * @param requestJSONObject the specified request json object, for example,      <pre>
-     * {
-     *     "userId"; "",
-     *     "type": int,
-     *     "bizType": int,
-     *     "receiver": "",
-     *     "code": "",
-     *     "status": int,
-     *     "expired": long
-     * }
-     * </pre>
-     *
+     * @param requestJSONObject the specified request json object, for example,
+     *                          {
+     *                          "userId"; "",
+     *                          "type": int,
+     *                          "bizType": int,
+     *                          "receiver": "",
+     *                          "code": "",
+     *                          "status": int,
+     *                          "expired": long
+     *                          }
      * @return verifycode id
      * @throws ServiceException service exception
      */
@@ -175,6 +184,11 @@ public class VerifycodeMgmtService {
                         subject = langPropsService.get("forgetEmailSubjectLabel", Latkes.getLocale());
 
                         break;
+                    case Verifycode.BIZ_TYPE_C_BIND_EMAIL:
+                        dataModel.put(Keys.CODE, code);
+                        subject = langPropsService.get("bindEmailSubjectLabel", Latkes.getLocale());
+
+                        break;
                     default:
                         LOGGER.warn("Send email verify code failed with wrong biz type [" + bizType + "]");
 
@@ -186,8 +200,7 @@ public class VerifycodeMgmtService {
 
                 final String fromName = langPropsService.get("symphonyEnLabel")
                         + " " + langPropsService.get("verifycodeEmailFromNameLabel", Latkes.getLocale());
-                Mails.sendHTML(fromName, subject, toMail,
-                        Mails.TEMPLATE_NAME_VERIFYCODE, dataModel);
+                Mails.sendHTML(fromName, subject, toMail, Mails.TEMPLATE_NAME_VERIFYCODE, dataModel);
             }
         } catch (final RepositoryException e) {
             LOGGER.log(Level.ERROR, "Sends verifycode failed", e);

@@ -1,34 +1,34 @@
 /*
- * Symphony - A modern community (forum/SNS/blog) platform written in Java.
- * Copyright (C) 2012-2016,  b3log.org & hacpai.com
+ * Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+ * Copyright (C) 2012-present, b3log.org
  *
  * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
+ * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 package org.b3log.symphony.service;
 
 import org.b3log.latke.Keys;
+import org.b3log.latke.ioc.Inject;
 import org.b3log.latke.logging.Level;
 import org.b3log.latke.logging.Logger;
 import org.b3log.latke.model.Pagination;
 import org.b3log.latke.model.User;
-import org.b3log.latke.repository.Query;
-import org.b3log.latke.repository.RepositoryException;
-import org.b3log.latke.repository.SortDirection;
-import org.b3log.latke.service.ServiceException;
+import org.b3log.latke.repository.*;
+import org.b3log.latke.service.LangPropsService;
 import org.b3log.latke.service.annotation.Service;
 import org.b3log.latke.util.CollectionUtils;
 import org.b3log.latke.util.Paginator;
+import org.b3log.latke.util.Strings;
 import org.b3log.symphony.model.Permission;
 import org.b3log.symphony.model.Role;
 import org.b3log.symphony.repository.PermissionRepository;
@@ -38,14 +38,13 @@ import org.b3log.symphony.repository.UserRepository;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import javax.inject.Inject;
 import java.util.*;
 
 /**
  * Role query service.
  *
  * @author <a href="http://88250.b3log.org">Liang Ding</a>
- * @version 1.4.0.0, Dec 11, 2016
+ * @version 1.6.0.0, Jun 23, 2018
  * @since 1.8.0
  */
 @Service
@@ -81,6 +80,64 @@ public class RoleQueryService {
     private UserRepository userRepository;
 
     /**
+     * Language service.
+     */
+    @Inject
+    private LangPropsService langPropsService;
+
+    /**
+     * Count the specified role's uses.
+     *
+     * @param roleId the specified role id
+     * @return use count, returns integer max value if fails
+     */
+    public int countUser(final String roleId) {
+        try {
+            final Query userCountQuery = new Query().setFilter(new PropertyFilter(User.USER_ROLE, FilterOperator.EQUAL, roleId));
+
+            return (int) userRepository.count(userCountQuery);
+        } catch (final Exception e) {
+            LOGGER.log(Level.ERROR, "Count role [id=" + roleId + "] uses failed", e);
+
+            return Integer.MAX_VALUE;
+        }
+    }
+
+    /**
+     * Checks whether the specified user has the specified requisite permissions.
+     *
+     * @param userId               the specified user id
+     * @param requisitePermissions the specified requisite permissions
+     * @return @code true} if the role has the specified requisite permissions, returns @code false} otherwise
+     */
+    public boolean userHasPermissions(final String userId, final Set<String> requisitePermissions) {
+        try {
+            final JSONObject user = userRepository.get(userId);
+            final String roleId = user.optString(User.USER_ROLE);
+            final Set<String> permissions = getPermissions(roleId);
+
+            return Permission.hasPermission(requisitePermissions, permissions);
+        } catch (final Exception e) {
+            LOGGER.log(Level.ERROR, "Checks user [" + userId + "] has permission failed", e);
+
+            return false;
+        }
+    }
+
+    /**
+     * Checks whether the specified role has the specified requisite permissions.
+     *
+     * @param roleId               the specified role id
+     * @param requisitePermissions the specified requisite permissions
+     * @return @code true} if the role has the specified requisite permissions, returns @code false} otherwise
+     */
+    public boolean hasPermissions(final String roleId, final Set<String> requisitePermissions) {
+        final Set<String> permissions = getPermissions(roleId);
+
+        return Permission.hasPermission(requisitePermissions, permissions);
+    }
+
+    /**
      * Gets an role specified by the given role id.
      *
      * @param roleId the given role id
@@ -88,7 +145,13 @@ public class RoleQueryService {
      */
     public JSONObject getRole(final String roleId) {
         try {
-            return roleRepository.get(roleId);
+            final JSONObject ret = roleRepository.get(roleId);
+
+            if (!Strings.isNumeric(roleId)) {
+                ret.put(Role.ROLE_NAME, langPropsService.get(roleId + "NameLabel"));
+            }
+
+            return ret;
         } catch (final RepositoryException e) {
             LOGGER.log(Level.ERROR, "Gets role failed", e);
 
@@ -259,6 +322,7 @@ public class RoleQueryService {
      *         "oId": "",
      *         "roleName": "",
      *         "roleDescription": "",
+     *         "roleUserCount": int,
      *         "permissions": [
      *             {
      *                 "oId": "adUpdateADSide",
@@ -268,24 +332,21 @@ public class RoleQueryService {
      *     }, ....]
      * }
      * </pre>
-     * @throws ServiceException service exception
      * @see Pagination
      */
-    public JSONObject getRoles(final int currentPage, final int pageSize, final int windowSize)
-            throws ServiceException {
+    public JSONObject getRoles(final int currentPage, final int pageSize, final int windowSize) {
         final JSONObject ret = new JSONObject();
 
-        final Query query = new Query().setCurrentPageNum(currentPage).setPageSize(pageSize).
+        final Query query = new Query().setPage(currentPage, pageSize).
                 addSort(Keys.OBJECT_ID, SortDirection.DESCENDING);
 
-        JSONObject result = null;
-
+        JSONObject result;
         try {
             result = roleRepository.get(query);
         } catch (final RepositoryException e) {
             LOGGER.log(Level.ERROR, "Gets roles failed", e);
 
-            throw new ServiceException(e);
+            return null;
         }
 
         final int pageCount = result.optJSONObject(Pagination.PAGINATION).optInt(Pagination.PAGINATION_PAGE_COUNT);
@@ -297,7 +358,7 @@ public class RoleQueryService {
         pagination.put(Pagination.PAGINATION_PAGE_NUMS, pageNums);
 
         final JSONArray data = result.optJSONArray(Keys.RESULTS);
-        final List<JSONObject> roles = CollectionUtils.<JSONObject>jsonArrayToList(data);
+        final List<JSONObject> roles = CollectionUtils.jsonArrayToList(data);
 
         try {
             for (final JSONObject role : roles) {
@@ -312,20 +373,42 @@ public class RoleQueryService {
 
                     permissions.add(permission);
                 }
+
+                final Query userCountQuery = new Query().
+                        setFilter(new PropertyFilter(User.USER_ROLE, FilterOperator.EQUAL, roleId));
+                final int count = (int) userRepository.count(userCountQuery);
+                role.put(Role.ROLE_T_USER_COUNT, count);
+
+                // fill description
+                if (Strings.isNumeric(roleId)) {
+                    continue;
+                }
+
+                String roleName = role.optString(Role.ROLE_NAME);
+                try {
+                    roleName = langPropsService.get(roleId + "NameLabel");
+                } catch (final Exception e) {
+                    // ignored
+                }
+
+                String roleDesc = role.optString(Role.ROLE_DESCRIPTION);
+                try {
+                    roleDesc = langPropsService.get(roleId + "DescLabel");
+                } catch (final Exception e) {
+                    // ignored
+                }
+
+                role.put(Role.ROLE_NAME, roleName);
+                role.put(Role.ROLE_DESCRIPTION, roleDesc);
             }
         } catch (final RepositoryException e) {
             LOGGER.log(Level.ERROR, "Gets role permissions failed", e);
 
-            throw new ServiceException(e);
+            return null;
         }
 
-        Collections.sort(roles, new Comparator<JSONObject>() {
-            @Override
-            public int compare(final JSONObject o1, final JSONObject o2) {
-                return ((List) o2.opt(Permission.PERMISSIONS)).size()
-                        - ((List) o1.opt(Permission.PERMISSIONS)).size();
-            }
-        });
+        Collections.sort(roles, (o1, o2) -> ((List) o2.opt(Permission.PERMISSIONS)).size()
+                - ((List) o1.opt(Permission.PERMISSIONS)).size());
 
         ret.put(Role.ROLES, (Object) roles);
 

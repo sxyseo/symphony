@@ -1,3 +1,22 @@
+<#--
+
+    Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+    Copyright (C) 2012-present, b3log.org
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+-->
 <div style="width:100%!important;font-family:Helvetica,Arial,sans-serif;background-color:#ececec;margin:0;padding:0" bgcolor="#ececec">
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#ececec" bgcolor="#ececec">
         <tbody>
@@ -66,7 +85,7 @@
                             <tr style="border-collapse:collapse">
                                 <td width="640" align="center" bgcolor="#FFFFFF" style="border-collapse:collapse;font-family:Helvetica,Arial,sans-serif">
                                     <a href="${servePath}" target="_blank">
-                                        <img height="140" width="640" src="${staticServePath}/images/mail/verify-banner1.png" alt="黑客派">
+                                        <img height="140" width="640" src="${staticServePath}/images/mail/verify-banner1.png" alt="Sym">
                                     </a>
                                 </td>
                             </tr>
@@ -86,7 +105,11 @@
                                                                         ${userName}，你好：
                                                                     </p>
                                                                     <div align="left" style="font-size:13px;line-height:20px;color:#444444;margin-top:0px;margin-bottom:18px;font-family:Helvetica,Arial,sans-serif">
+                                                                        <#if url??>
                                                                         请尽快完成验证：<a href="${url}">${url}</a>
+                                                                        <#else>
+                                                                        验证码：${code}
+                                                                        </#if>
                                                                     </div>
                                                                     <div style="border-bottom-style:solid;border-bottom-width:1px;border-bottom-color:#eee;margin-bottom:30px"></div>
                                                                     <p align="left" style="font-size:18px;line-height:24px;color:#333;font-weight:bold;margin-top:0px;margin-bottom:18px;font-family:Helvetica,Arial,sans-serif">
@@ -96,15 +119,11 @@
                                                                         <table>
                                                                             <tbody><tr style="border-collapse:collapse">
                                                                                     <td style="border-collapse:collapse;font-family:Helvetica,Arial,sans-serif;font-size:13px;line-height:20px;padding:0 0 15px">
-                                                                                        我们正在构建一个活跃的小众社区。大家在这里相互 信任 ，以 平等 • 自由 • 奔放 的价值观进行分享交流。
-                                                                                        <ul> 
-                                                                                            <li>分享自己见解的同时请对他人保持友善</li> 
-                                                                                            <li>禁止分享、讨论任何涉及版权盗用相关的内容</li> 
-                                                                                            <li>禁止未经原作者授权的内容转载</li> 
-                                                                                            <li>回帖不能修改，发布后不要后悔</li> 
-                                                                                            <li>帖子可以修改，并且任何人都可以查看修改历史</li> 
+                                                                                        <ul>
+                                                                                            <li>我们正在构建一个活跃的小众社区</li>
+                                                                                            <li>大家在这里相互信任，以 平等 • 自由 • 奔放 的价值观进行分享交流</li>
+                                                                                            <li>最终，希望大家能够找到与自己志同道合的伙伴，共同成长</li>
                                                                                         </ul>
-                                                                                        希望大家能够找找到与自己志同道合的伙伴，共同成长。
                                                                                     </td>
                                                                                 </tr>                                                        
                                                                             </tbody></table>
@@ -140,17 +159,11 @@
                                                     <span>
                                                         <p align="left" style="font-size:12px;line-height:15px;color:#666666;margin-top:0px;margin-bottom:5px;white-space:normal">
                                                             <span>
-                                                                <a href="${servePath}/about" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">关于</a> 
-                                                                <span style="color:#999">•</span>
-                                                                <a href="${servePath}/article/1457158841475" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">API</a>
+                                                                <a href="${servePath}/about" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">关于</a>
                                                                 <span style="color:#999">•</span>
                                                                 <a href="${servePath}/perfect" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">优选</a> 
                                                                 <span style="color:#999">•</span>
-                                                                <a href="${servePath}/hot" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">热门</a> 
-                                                                <span style="color:#999">•</span>
-                                                                <a href="${servePath}/forge/link" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">链接熔炉</a> 
-                                                                <span style="color:#999">•</span>
-                                                                <a href="${servePath}/article/1460083956075" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">广告投放</a>
+                                                                <a href="${servePath}/tag/announcement" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">公告</a>
                                                             </span>
                                                         </p>
                                                     </span>

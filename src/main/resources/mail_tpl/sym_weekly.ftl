@@ -1,3 +1,22 @@
+<#--
+
+    Symphony - A modern community (forum/BBS/SNS/blog) platform written in Java.
+    Copyright (C) 2012-present, b3log.org
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+-->
 <div style="width:100%!important;font-family:Helvetica,Arial,sans-serif;background-color:#ececec;margin:0;padding:0" bgcolor="#ececec">
     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#ececec" bgcolor="#ececec">
         <tbody>
@@ -66,7 +85,7 @@
                             <tr style="border-collapse:collapse">
                                 <td width="640" align="center" bgcolor="#FFFFFF" style="border-collapse:collapse;font-family:Helvetica,Arial,sans-serif">
                                     <a href="${servePath}" target="_blank">
-                                        <img height="140" width="640" src="${staticServePath}/images/mail/weekly-banner3.png" alt="黑客派">
+                                        <img height="140" width="640" src="${staticServePath}/images/mail/weekly-banner3.png" alt="Sym">
                                     </a>
                                 </td>
                             </tr>
@@ -206,15 +225,11 @@
                                                             <span>
                                                                 <a href="${servePath}/about" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">关于</a> 
                                                                 <span style="color:#999">•</span>
-                                                                <a href="${servePath}/article/1457158841475" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">API</a>
                                                                 <span style="color:#999">•</span>
                                                                 <a href="${servePath}/perfect" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">优选</a> 
                                                                 <span style="color:#999">•</span>
-                                                                <a href="${servePath}/hot" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">热门</a> 
+                                                                <a href="${servePath}/tag/announcement" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">公告</a>
                                                                 <span style="color:#999">•</span>
-                                                                <a href="${servePath}/forge/link" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">链接熔炉</a> 
-                                                                <span style="color:#999">•</span>
-                                                                <a href="${servePath}/article/1460083956075" style="color:#4183c4;font-weight:bold;text-decoration:none" target="_blank">广告投放</a>
                                                             </span>
                                                         </p>
                                                     </span>
